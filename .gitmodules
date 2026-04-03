@@ -1,0 +1,6 @@
+[submodule "reference_repositories/effect-smol"]
+	path = reference_repositories/effect-smol
+	url = https://github.com/Effect-TS/effect-smol
+[submodule "reference_repositories/query"]
+	path = reference_repositories/query
+	url = https://github.com/tanstack/query
