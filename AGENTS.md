@@ -1,0 +1,5 @@
+- Comment regexes in the style of the `regex101` website.
+- ALWAYS run `bun all` after making any changes.
+- Use `Effect.fn(...)` when the helper should create an OTEL span, and `Effect.fnUntraced(...)` otherwise.
+- Follow `UBIQUITOUS_LANGUAGE.md`: If you or the user uses an **alias to avoid** (in code, docs, or conversation), call it out and fix it toward the canonical term, or update the Ubiquitous Language document to reflect a change in terminology after consulting the team. Keep the document up-to-date. If a new term is used that closely resembles an existing term, correct the mistake and update the **aliases to avoid** column.
+- Don't be shy about referencing `reference_repositories` folder for ideas/patterns.

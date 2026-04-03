@@ -1,0 +1,21 @@
+{
+	"typescript.experimental.useTsgo": true,
+	"typescript.native-preview.tsdk": "node_modules/@typescript/native-preview",
+	"editor.formatOnSave": true,
+	"editor.codeActionsOnSave": {
+		"source.fixAll.biome": "explicit",
+		"source.organizeImports.biome": "explicit"
+	},
+	"json.schemaDownload.enable": true,
+	"css.lint.unknownAtRules": "ignore",
+	"files.readonlyInclude": {
+		"reference_repositories/**": true
+	},
+	"files.watcherExclude": {
+		"reference_repositories/**": true
+	},
+	"search.exclude": {
+		"reference_repositories/**": true
+	},
+	"typescript.enablePromptUseWorkspaceTsdk": true
+}

@@ -1,0 +1,31 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": [],
+	"categories": {
+		// Turn off all categories. We are letting Biome handle all of the linting and formatting.
+		// Oxlint is only used for the Effect Query custom rules.
+		"correctness": "off",
+		"nursery": "off",
+		"pedantic": "off",
+		"perf": "off",
+		"restriction": "off",
+		"style": "off",
+		"suspicious": "off"
+	},
+	"options": {
+		"reportUnusedDisableDirectives": "error"
+	},
+	"jsPlugins": ["./tools/effect-query-oxlint-plugin.ts"],
+	"rules": {
+		"effect-query/no-type-assertion-except-const": "error",
+		"effect-query/no-throw": "error",
+		"effect-query/no-try-catch": "error",
+		"effect-query/no-error-class": "error",
+		"effect-query/no-then-chain": "error",
+		"effect-query/no-promise-global": "error",
+		"effect-query/no-tag-property-access": "error",
+		"effect-query/prefer-schema-tagged-error-class": "error",
+		"effect-query/prefer-effect-fn-for-effect-gen": "error"
+	},
+	"ignorePatterns": ["reference_repositories/**"]
+}

@@ -1,0 +1,25 @@
+{
+	"name": "effect-query",
+	"module": "index.ts",
+	"scripts": {
+		"typecheck": "tsgo",
+		"all": "bun typecheck && bun check && bun test",
+		"check": "bun --bun biome check --write && bun --bun oxlint -c .oxlintrc.jsonc",
+		"prepare": "effect-tsgo patch"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.10",
+		"@effect/language-service": "^0.84.3",
+		"@effect/tsgo": "^0.2.1",
+		"@oxlint/plugins": "^1.58.0",
+		"@types/bun": "latest",
+		"@typescript/native-preview": "^7.0.0-dev.20260403.1",
+		"oxlint": "^1.58.0"
+	},
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@effect/platform-bun": "^4.0.0-beta.43",
+		"effect": "^4.0.0-beta.43"
+	}
+}
