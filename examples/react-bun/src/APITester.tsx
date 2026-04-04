@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Schema from "effect/Schema";
 import {
@@ -82,11 +83,16 @@ export function APITester() {
 		return yield* response.text;
 	});
 
-	const testEndpoint = (e: SubmitEvent<HTMLFormElement>) => {
+	const testEndpoint = async (e: SubmitEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		void httpClientRuntime
-			.runPromise(requestEndpoint(e.currentTarget))
-			.then(setResponseValue, (error) => setResponseValue(String(error)));
+		const exit = await httpClientRuntime.runPromiseExit(
+			requestEndpoint(e.currentTarget),
+		);
+		if (Exit.isSuccess(exit)) {
+			setResponseValue(exit.value);
+			return;
+		}
+		setResponseValue(String(exit.cause));
 	};
 
 	return (
