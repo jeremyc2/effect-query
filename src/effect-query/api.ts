@@ -6,10 +6,10 @@ import {
 	flattenObservedResult,
 	getFailureCause,
 	getSuccess,
+	hasCreateQueryAtomRuntime,
 	hashQueryKey,
 	hasMutationRuntime,
-	hasQueryInputRuntime,
-	hasQueryRuntime,
+	hasQueryAtomFactoryRuntime,
 	isFailure,
 	isInitial,
 	isSuccess,
@@ -19,23 +19,23 @@ import {
 import { defaultRuntime, provideRuntime } from "./runtime.ts";
 import { QueryStore } from "./store.ts";
 import type {
+	CreateQueryAtomInput,
 	DataUpdater,
 	MutationInput,
 	MutationOptions,
 	QueryAtom,
-	QueryFamily,
-	QueryFamilyInput,
-	QueryFamilyOptions,
-	QueryInput,
+	QueryAtomFactory,
+	QueryAtomFactoryInput,
+	QueryAtomFactoryOptions,
 	QueryKey,
 	QueryRuntime,
 	ReactivityKeySet,
 } from "./types.ts";
 
-const familyWithRuntime = <Arg, A, E = never, R = never>(
+const createQueryAtomFactoryWithRuntime = <Arg, A, E = never, R = never>(
 	runtime: QueryRuntime<R>,
-	options: QueryFamilyOptions<Arg, A, E, R>,
-): QueryFamily<Arg, A, E> => {
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
+): QueryAtomFactory<Arg, A, E> => {
 	const definition = makeDefinition(options);
 	const atoms = Atom.family((arg: Arg) => {
 		let refreshEpoch = 0;
@@ -110,38 +110,44 @@ const familyWithRuntime = <Arg, A, E = never, R = never>(
 	});
 };
 
-export function family<Arg, A, E = never>(
-	options: QueryFamilyOptions<Arg, A, E, never>,
-): QueryFamily<Arg, A, E>;
-export function family<Arg, A, E = never, R = never>(
-	options: QueryFamilyOptions<Arg, A, E, R> & {
+export function createQueryAtomFactory<Arg, A, E = never>(
+	options: QueryAtomFactoryOptions<Arg, A, E, never>,
+): QueryAtomFactory<Arg, A, E>;
+export function createQueryAtomFactory<Arg, A, E = never, R = never>(
+	options: QueryAtomFactoryOptions<Arg, A, E, R> & {
 		readonly runtime: QueryRuntime<R>;
 	},
-): QueryFamily<Arg, A, E>;
-export function family<Arg, A, E = never, R = never>(
-	options: QueryFamilyInput<Arg, A, E, R>,
-): QueryFamily<Arg, A, E> {
-	if (!hasQueryRuntime(options)) {
-		return familyWithRuntime<Arg, A, E, never>(defaultRuntime, options);
+): QueryAtomFactory<Arg, A, E>;
+export function createQueryAtomFactory<Arg, A, E = never, R = never>(
+	options: QueryAtomFactoryInput<Arg, A, E, R>,
+): QueryAtomFactory<Arg, A, E> {
+	if (!hasQueryAtomFactoryRuntime(options)) {
+		return createQueryAtomFactoryWithRuntime<Arg, A, E, never>(
+			defaultRuntime,
+			options,
+		);
 	}
-	return familyWithRuntime<Arg, A, E, R>(options.runtime, options);
+	return createQueryAtomFactoryWithRuntime<Arg, A, E, R>(
+		options.runtime,
+		options,
+	);
 }
 
-export function query<A, E = never>(
-	options: QueryInput<A, E, never>,
+export function createQueryAtom<A, E = never>(
+	options: CreateQueryAtomInput<A, E, never>,
 ): QueryAtom<A, E>;
-export function query<A, E = never, R = never>(
-	options: Omit<QueryFamilyOptions<void, A, E, R>, "key" | "query"> & {
+export function createQueryAtom<A, E = never, R = never>(
+	options: Omit<QueryAtomFactoryOptions<void, A, E, R>, "key" | "query"> & {
 		readonly runtime: QueryRuntime<R>;
 		readonly key: QueryKey;
 		readonly query: Effect.Effect<A, E, R>;
 	},
 ): QueryAtom<A, E>;
-export function query<A, E = never, R = never>(
-	options: QueryInput<A, E, R>,
+export function createQueryAtom<A, E = never, R = never>(
+	options: CreateQueryAtomInput<A, E, R>,
 ): QueryAtom<A, E> {
-	const queries = hasQueryInputRuntime(options)
-		? family({
+	const queries = hasCreateQueryAtomRuntime(options)
+		? createQueryAtomFactory({
 				runtime: options.runtime,
 				key: () => options.key,
 				query: () => options.query,
@@ -150,7 +156,7 @@ export function query<A, E = never, R = never>(
 				label: options.label,
 				schema: options.schema,
 			})
-		: family<void, A, E>({
+		: createQueryAtomFactory<void, A, E>({
 				key: () => options.key,
 				query: () => options.query,
 				reactivityKeys: options.reactivityKeys,
@@ -213,28 +219,28 @@ export function mutation<Arg, A, E = never, R = never>(
 }
 
 export const prefetch = Effect.fn(function* <Arg, A, E>(
-	queries: QueryFamily<Arg, A, E>,
+	queries: QueryAtomFactory<Arg, A, E>,
 	arg: Arg,
 ) {
 	yield* queries.prefetch(arg);
 });
 
 export const ensure = Effect.fn(function* <Arg, A, E>(
-	queries: QueryFamily<Arg, A, E>,
+	queries: QueryAtomFactory<Arg, A, E>,
 	arg: Arg,
 ) {
 	return yield* queries.ensure(arg);
 });
 
 export const refresh = Effect.fn(function* <Arg, A, E>(
-	queries: QueryFamily<Arg, A, E>,
+	queries: QueryAtomFactory<Arg, A, E>,
 	arg: Arg,
 ) {
 	return yield* queries.refresh(arg);
 });
 
 export const setData = Effect.fn(function* <Arg, A, E>(
-	queries: QueryFamily<Arg, A, E>,
+	queries: QueryAtomFactory<Arg, A, E>,
 	arg: Arg,
 	updater: DataUpdater<A>,
 ) {
@@ -242,7 +248,7 @@ export const setData = Effect.fn(function* <Arg, A, E>(
 });
 
 export const peek = Effect.fn(function* <Arg, A, E>(
-	queries: QueryFamily<Arg, A, E>,
+	queries: QueryAtomFactory<Arg, A, E>,
 	arg: Arg,
 ) {
 	return yield* queries.peek(arg);

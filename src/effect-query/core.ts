@@ -6,15 +6,15 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type {
+	CreateQueryAtomInput,
+	CreateQueryAtomInputWithRuntime,
 	DataUpdater,
 	InternalQuery,
 	MutationInput,
+	QueryAtomFactoryInput,
+	QueryAtomFactoryOptions,
 	QueryCodec,
 	QueryEntryBase,
-	QueryFamilyInput,
-	QueryFamilyOptions,
-	QueryInput,
-	QueryInputWithRuntime,
 	QueryKey,
 	QueryPolicy,
 	QueryResult,
@@ -35,7 +35,7 @@ class QueryResultMissingError extends Schema.TaggedErrorClass<QueryResultMissing
 ) {}
 
 export const makeDefinition = <Arg, A, E, R>(
-	options: QueryFamilyOptions<Arg, A, E, R>,
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
 ): InternalQuery<Arg, A, E, R> => ({
 	key: options.key,
 	query: options.query,
@@ -74,7 +74,7 @@ export const flattenObservedResult = <A, E>(
 };
 
 export const resolveLabel = <Arg, A, E, R>(
-	options: QueryFamilyOptions<Arg, A, E, R>,
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
 ): ((arg: Arg) => string) => {
 	const label = options.label;
 	if (typeof label === "function") {
@@ -89,9 +89,9 @@ export const hasRuntimeState = <R, E>(
 ): runtime is QueryRuntimeWithLayer<R, E> =>
 	QueryRuntimeLayerId in runtime && QueryRuntimeStateId in runtime;
 
-export const hasQueryRuntime = <Arg, A, E, R>(
-	options: QueryFamilyInput<Arg, A, E, R>,
-): options is QueryFamilyOptions<Arg, A, E, R> & {
+export const hasQueryAtomFactoryRuntime = <Arg, A, E, R>(
+	options: QueryAtomFactoryInput<Arg, A, E, R>,
+): options is QueryAtomFactoryOptions<Arg, A, E, R> & {
 	readonly runtime: QueryRuntime<R>;
 } => options.runtime !== undefined;
 
@@ -102,9 +102,10 @@ export const hasMutationRuntime = <Arg, A, E, R>(
 	readonly run: (arg: Arg) => Effect.Effect<A, E, R>;
 } & MutationInput<Arg, A, E, R> => options.runtime !== undefined;
 
-export const hasQueryInputRuntime = <A, E, R>(
-	options: QueryInput<A, E, R>,
-): options is QueryInputWithRuntime<A, E, R> => options.runtime !== undefined;
+export const hasCreateQueryAtomRuntime = <A, E, R>(
+	options: CreateQueryAtomInput<A, E, R>,
+): options is CreateQueryAtomInputWithRuntime<A, E, R> =>
+	options.runtime !== undefined;
 
 export const defaultQueryCodec = <A, E>(): QueryCodec<A, E> =>
 	AsyncResult.Schema({

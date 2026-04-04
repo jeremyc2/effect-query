@@ -3,9 +3,10 @@ export type {
 	DehydratedAtomValue,
 } from "./effect-query/api.ts";
 export {
+	createQueryAtom,
+	createQueryAtomFactory,
 	dehydrate,
 	ensure,
-	family,
 	getFailureCause,
 	getSuccess,
 	hydrate,
@@ -19,19 +20,19 @@ export {
 	onWindowFocus,
 	peek,
 	prefetch,
-	query,
 	refresh,
 	setData,
 } from "./effect-query/api.ts";
 export { makeRuntime, provideRuntime } from "./effect-query/runtime.ts";
 export { QueryStore, QueryStoreLayer } from "./effect-query/store.ts";
 export type {
+	CreateQueryAtomOptions,
 	DataUpdater,
 	MutationOptions,
 	QueryAtom,
+	QueryAtomFactory,
+	QueryAtomFactoryOptions,
 	QueryCodec,
-	QueryFamily,
-	QueryFamilyOptions,
 	QueryHash,
 	QueryKey,
 	QueryPolicy,

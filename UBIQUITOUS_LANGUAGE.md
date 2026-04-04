@@ -18,8 +18,8 @@ Source code, documentation, examples, and conversation should all use the terms 
 
 | Canonical | Aliases to avoid | Origin | Prolif. | Learn |
 | --- | --- | --- | --- | --- |
-| **query family** | `query hook factory`, `observer factory` | Coined | 8 | 9 |
-| **query atom** | `useQuery result`, `observer result` | Coined | 7 | 8 |
+| **query atom factory** | `query family`, `query hook factory`, `observer factory` | Coined | 8 | 9 |
+| **query atom** | `useQuery result`, `observer result`, `query family member` | Coined | 7 | 8 |
 | **query runtime** | `query client`, `cache client` | Coined | 7 | 8 |
 | **reactivity keys** | `query filters`, `cache selectors` | Coined | 9 | 9 |
 | **mutation** | `action hook`, `command hook` | TanStack Query | 7 | 8 |

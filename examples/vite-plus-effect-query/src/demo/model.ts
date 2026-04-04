@@ -5,7 +5,12 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as ServiceMap from "effect/ServiceMap";
 import * as Atom from "effect/unstable/reactivity/Atom";
-import { family, makeRuntime, mutation, query } from "../../../../index.ts";
+import {
+	createQueryAtom,
+	createQueryAtomFactory,
+	makeRuntime,
+	mutation,
+} from "../../../../index.ts";
 
 export type TaskStatus = "planned" | "active" | "done";
 export type TaskFilter = "all" | TaskStatus;
@@ -90,9 +95,9 @@ const initialStore: DemoStore = {
 	tasks: [
 		makeTask({
 			id: "task-1",
-			title: "Ship the query family docs page",
+			title: "Ship the query atom factory docs page",
 			description:
-				"Document how list and detail query families share reactivity keys.",
+				"Document how list and detail query atom factories share reactivity keys.",
 			status: "active",
 			assignee: "Ada",
 			updatedAt: "2026-04-03T16:00:00.000Z",
@@ -315,7 +320,7 @@ export const createDemoModel = () => {
 
 	const taskFilterAtom = Atom.make<TaskFilter>("all");
 	const taskComposerAtom = Atom.make<CreateTaskInput>({
-		title: "Pair Effect Atom with a query family",
+		title: "Pair Effect Atom with a query atom factory",
 		description:
 			"Keep form state in an atom and let the mutation invalidate the matching query atoms.",
 		status: "planned",
@@ -326,11 +331,11 @@ export const createDemoModel = () => {
 			draft.title.trim().length >= 4 && draft.description.trim().length >= 12
 		);
 	});
-	const commentDraftFamily = Atom.family((taskId: string) =>
+	const commentDraftAtomFactory = Atom.family((taskId: string) =>
 		Atom.make(`This task ${taskId} is a good place to show a mutation.`),
 	);
 
-	const dashboardQuery = query({
+	const dashboardAtom = createQueryAtom({
 		runtime: queryRuntime,
 		key: ["dashboard"],
 		reactivityKeys: () => ({
@@ -339,7 +344,7 @@ export const createDemoModel = () => {
 		query: DemoApi.use((api) => api.getDashboard),
 	});
 
-	const taskListQuery = family({
+	const taskListAtomFactory = createQueryAtomFactory({
 		runtime: queryRuntime,
 		key: (filter: TaskFilter) => ["tasks", filter],
 		reactivityKeys: () => ({
@@ -348,7 +353,7 @@ export const createDemoModel = () => {
 		query: (filter: TaskFilter) => DemoApi.use((api) => api.getTasks(filter)),
 	});
 
-	const taskDetailQuery = family({
+	const taskDetailAtomFactory = createQueryAtomFactory({
 		runtime: queryRuntime,
 		key: (taskId: string) => ["task", taskId],
 		reactivityKeys: (taskId: string) => ({
@@ -391,10 +396,10 @@ export const createDemoModel = () => {
 		taskFilterAtom,
 		taskComposerAtom,
 		canCreateTaskAtom,
-		commentDraftFamily,
-		dashboardQuery,
-		taskListQuery,
-		taskDetailQuery,
+		commentDraftAtomFactory,
+		dashboardAtom,
+		taskListAtomFactory,
+		taskDetailAtomFactory,
 		createTaskMutation,
 		advanceTaskMutation,
 		addCommentMutation,

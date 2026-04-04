@@ -1,6 +1,7 @@
 import { getRouteApi, Link, Outlet } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import type { ReactNode } from "react";
 import {
@@ -66,7 +67,7 @@ export function RootLayout() {
 						</h1>
 						<p className="mt-4 text-base text-white/78">
 							A tiny task tracker that keeps local UI state in atoms and remote
-							state in query families.
+							state in query atom factories.
 						</p>
 					</div>
 
@@ -96,7 +97,9 @@ export function RootLayout() {
 					<div className="rounded-[1.2rem] bg-white/4 p-4">
 						<h2 className="m-0 text-lg font-semibold">What this demos</h2>
 						<ul className="mt-4 list-disc space-y-2 pl-5 text-white/78">
-							<li>Query families for dashboard, list, and detail pages</li>
+							<li>
+								Query atom factories for dashboard, list, and detail pages
+							</li>
 							<li>Mutations with invalidation across shared reactivity keys</li>
 							<li>
 								Effect Atom state for filters, drafts, and derived UI state
@@ -116,9 +119,9 @@ export function RootLayout() {
 
 export function OverviewPage() {
 	const {
-		model: { dashboardQuery, taskDetailQuery },
+		model: { dashboardAtom, taskDetailAtomFactory },
 	} = useDemo();
-	const dashboard = useAtomValue(dashboardQuery);
+	const dashboard = useAtomValue(dashboardAtom);
 
 	return (
 		<section className="flex flex-col gap-6">
@@ -132,7 +135,7 @@ export function OverviewPage() {
 				<button
 					className={ghostButtonClassName}
 					onClick={() => {
-						void Effect.runPromise(dashboardQuery.refresh());
+						void Effect.runPromise(dashboardAtom.refresh());
 					}}
 					type="button"
 				>
@@ -185,7 +188,9 @@ export function OverviewPage() {
 										params={{ taskId: task.id }}
 										className="rounded-[1.2rem] bg-white/4 p-4 transition hover:-translate-y-px hover:bg-white/6"
 										onMouseEnter={() => {
-											void Effect.runPromise(taskDetailQuery.prefetch(task.id));
+											void Effect.runPromise(
+												taskDetailAtomFactory.prefetch(task.id),
+											);
 										}}
 									>
 										<div className="flex items-center justify-between gap-4">
@@ -212,8 +217,8 @@ export function TasksPage() {
 			taskComposerAtom,
 			taskFilterAtom,
 			canCreateTaskAtom,
-			taskListQuery,
-			taskDetailQuery,
+			taskListAtomFactory,
+			taskDetailAtomFactory,
 			createTaskMutation,
 			advanceTaskMutation,
 		},
@@ -223,7 +228,7 @@ export function TasksPage() {
 	const draft = useAtomValue(taskComposerAtom);
 	const updateDraft = useAtomUpdate(taskComposerAtom);
 	const canCreateTask = useAtomValue(canCreateTaskAtom);
-	const tasks = useAtomValue(taskListQuery(selectedFilter));
+	const tasks = useAtomValue(taskListAtomFactory(selectedFilter));
 	const createTask = useMutation(createTaskMutation);
 	const advanceTask = useMutation(advanceTaskMutation);
 
@@ -233,13 +238,13 @@ export function TasksPage() {
 				<div>
 					<p className={eyebrowClassName}>Tasks</p>
 					<h2 className="m-0 text-3xl font-semibold tracking-tight">
-						Use an atom to pick the active query family member
+						Use an atom to choose which query atom to read
 					</h2>
 				</div>
 				<button
 					className={ghostButtonClassName}
 					onClick={() => {
-						void Effect.runPromise(taskListQuery.refresh(selectedFilter));
+						void Effect.runPromise(taskListAtomFactory.refresh(selectedFilter));
 					}}
 					type="button"
 				>
@@ -327,7 +332,7 @@ export function TasksPage() {
 				<section className={panelClassName}>
 					<div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
 						<div>
-							<p className={eyebrowClassName}>Query family</p>
+							<p className={eyebrowClassName}>Query atom factory</p>
 							<h3 className="m-0 text-2xl font-semibold tracking-tight">
 								{filterLabel(selectedFilter)}
 							</h3>
@@ -369,7 +374,7 @@ export function TasksPage() {
 												className="text-lg font-semibold transition hover:text-[#f6b15a]"
 												onMouseEnter={() => {
 													void Effect.runPromise(
-														taskDetailQuery.prefetch(task.id),
+														taskDetailAtomFactory.prefetch(task.id),
 													);
 												}}
 											>
@@ -405,14 +410,14 @@ export function TaskDetailPage() {
 	const { taskId } = taskDetailRouteApi.useParams();
 	const {
 		model: {
-			taskDetailQuery,
-			commentDraftFamily,
+			taskDetailAtomFactory,
+			commentDraftAtomFactory,
 			addCommentMutation,
 			advanceTaskMutation,
 		},
 	} = useDemo();
-	const task = useAtomValue(taskDetailQuery(taskId));
-	const commentDraftAtom = commentDraftFamily(taskId);
+	const task = useAtomValue(taskDetailAtomFactory(taskId));
+	const commentDraftAtom = commentDraftAtomFactory(taskId);
 	const commentDraft = useAtomValue(commentDraftAtom);
 	const setCommentDraft = useAtomSet(commentDraftAtom);
 	const advanceTask = useMutation(advanceTaskMutation);
@@ -430,12 +435,12 @@ export function TaskDetailPage() {
 		}
 
 		const previousTask = taskValue;
-		yield* taskDetailQuery.setData(taskId, (current) =>
+		yield* taskDetailAtomFactory.setData(taskId, (current) =>
 			update(getOptionOrElse(current, () => previousTask)),
 		);
 		const exit = yield* Effect.exit(run);
-		if (exit._tag === "Failure") {
-			yield* taskDetailQuery.setData(taskId, previousTask);
+		if (Exit.isFailure(exit)) {
+			yield* taskDetailAtomFactory.setData(taskId, previousTask);
 			return;
 		}
 		if (onSuccess !== undefined) {
@@ -455,7 +460,7 @@ export function TaskDetailPage() {
 				<button
 					className={ghostButtonClassName}
 					onClick={() => {
-						void Effect.runPromise(taskDetailQuery.refresh(taskId));
+						void Effect.runPromise(taskDetailAtomFactory.refresh(taskId));
 					}}
 					type="button"
 				>

@@ -39,7 +39,7 @@ export interface QueryPolicy<E = never, R = never> {
 	readonly refetchOnReconnect?: boolean | undefined;
 }
 
-export interface QueryFamilyOptions<Arg, A, E = never, R = never> {
+export interface QueryAtomFactoryOptions<Arg, A, E = never, R = never> {
 	readonly runtime?: QueryRuntime<R> | undefined;
 	readonly key: (arg: Arg) => QueryKey;
 	readonly query: (arg: Arg) => Effect.Effect<A, E, R>;
@@ -51,7 +51,7 @@ export interface QueryFamilyOptions<Arg, A, E = never, R = never> {
 	readonly schema?: QueryCodec<A, E> | undefined;
 }
 
-export interface QueryFamily<Arg, A, E = never> {
+export interface QueryAtomFactory<Arg, A, E = never> {
 	(arg: Arg): Atom.Atom<QueryResult<A, E>>;
 	readonly key: (arg: Arg) => QueryKey;
 	readonly hash: (arg: Arg) => QueryHash;
@@ -72,6 +72,8 @@ export interface QueryAtom<A, E = never> extends Atom.Atom<QueryResult<A, E>> {
 	readonly setData: (updater: DataUpdater<A>) => Effect.Effect<A>;
 }
 
+export type CreateQueryAtomOptions<A, E, R> = CreateQueryAtomInput<A, E, R>;
+
 export interface MutationOptions<Arg, A, E = never, R = never> {
 	readonly runtime?: QueryRuntime<R> | undefined;
 	readonly run: (arg: Arg) => Effect.Effect<A, E, R>;
@@ -88,9 +90,9 @@ export interface MutationOptions<Arg, A, E = never, R = never> {
 	readonly initialValue?: A | undefined;
 }
 
-export type QueryFamilyInput<Arg, A, E, R> =
-	| QueryFamilyOptions<Arg, A, E, never>
-	| (QueryFamilyOptions<Arg, A, E, R> & {
+export type QueryAtomFactoryInput<Arg, A, E, R> =
+	| QueryAtomFactoryOptions<Arg, A, E, never>
+	| (QueryAtomFactoryOptions<Arg, A, E, R> & {
 			readonly runtime: QueryRuntime<R>;
 	  });
 
@@ -100,19 +102,19 @@ export type MutationInput<Arg, A, E, R> =
 			readonly runtime: QueryRuntime<R>;
 	  });
 
-export type QueryInput<A, E, R> =
-	| (Omit<QueryFamilyOptions<void, A, E, never>, "key" | "query"> & {
+export type CreateQueryAtomInput<A, E, R> =
+	| (Omit<QueryAtomFactoryOptions<void, A, E, never>, "key" | "query"> & {
 			readonly key: QueryKey;
 			readonly query: Effect.Effect<A, E, never>;
 	  })
-	| (Omit<QueryFamilyOptions<void, A, E, R>, "key" | "query"> & {
+	| (Omit<QueryAtomFactoryOptions<void, A, E, R>, "key" | "query"> & {
 			readonly runtime: QueryRuntime<R>;
 			readonly key: QueryKey;
 			readonly query: Effect.Effect<A, E, R>;
 	  });
 
-export type QueryInputWithRuntime<A, E, R> = Extract<
-	QueryInput<A, E, R>,
+export type CreateQueryAtomInputWithRuntime<A, E, R> = Extract<
+	CreateQueryAtomInput<A, E, R>,
 	{ readonly runtime: QueryRuntime<R> }
 >;
 

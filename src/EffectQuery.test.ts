@@ -3,8 +3,8 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import {
+	createQueryAtomFactory,
 	dehydrate,
-	family,
 	hydrate,
 	makeRuntime,
 	mutation,
@@ -23,7 +23,7 @@ describe("effect-query", () => {
 			return `${id}:${calls}`;
 		});
 
-		const userQuery = family({
+		const userQuery = createQueryAtomFactory({
 			runtime,
 			key: (id: string) => ["user", id],
 			policy: {
@@ -49,7 +49,7 @@ describe("effect-query", () => {
 			return `${id}:${version}`;
 		});
 
-		const userQuery = family({
+		const userQuery = createQueryAtomFactory({
 			runtime,
 			key: (id: string) => ["user", id],
 			query: loadUser,
@@ -84,7 +84,7 @@ describe("effect-query", () => {
 		let userVersion = "v1";
 		let projectVersion = "v1";
 
-		const userQuery = family({
+		const userQuery = createQueryAtomFactory({
 			runtime,
 			key: (id: string) => ["user", id],
 			policy: {
@@ -96,7 +96,7 @@ describe("effect-query", () => {
 			query: (id: string) => Effect.succeed(`${id}:${userVersion}`),
 		});
 
-		const projectQuery = family({
+		const projectQuery = createQueryAtomFactory({
 			runtime,
 			key: (id: string) => ["project", id],
 			policy: {
@@ -158,7 +158,7 @@ describe("effect-query", () => {
 		const runtime = makeRuntime();
 		let calls = 0;
 
-		const userQuery = family({
+		const userQuery = createQueryAtomFactory({
 			runtime,
 			key: (id: string) => ["user", id],
 			policy: {
@@ -225,7 +225,7 @@ describe("effect-query", () => {
 			return task;
 		});
 
-		const taskQuery = family({
+		const taskQuery = createQueryAtomFactory({
 			runtime,
 			key: (taskId: string) => ["task", taskId],
 			policy: {
@@ -311,7 +311,7 @@ describe("effect-query", () => {
 	test("hydrates successful query snapshots into a fresh registry", async () => {
 		const runtime = makeRuntime();
 
-		const userQuery = family({
+		const userQuery = createQueryAtomFactory({
 			runtime,
 			key: (id: string) => ["user", id],
 			policy: {
@@ -348,7 +348,7 @@ describe("effect-query", () => {
 			return `${id}:${version}`;
 		});
 
-		const userQuery = family({
+		const userQuery = createQueryAtomFactory({
 			runtime,
 			key: (id: string) => ["user", id],
 			policy: {

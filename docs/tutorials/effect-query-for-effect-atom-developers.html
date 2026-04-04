@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>effect-query for Effect Atom developers</title>
+		<style>
+			:root {
+				color-scheme: light;
+				--bg: #f3f7f2;
+				--text: #142017;
+				--muted: #4d6153;
+				--line: #cbd8cc;
+				--accent: #1f6a3a;
+				--accent-pop: #8c39ff;
+				--note-bg: #eef6ec;
+				--note-line: #9fca9f;
+				--code-bg: #16211a;
+				--code-text: #eef7f0;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				font-family:
+					Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif;
+				background:
+					radial-gradient(circle at top right, #eef9ed 0, transparent 28rem),
+					linear-gradient(180deg, #f9fcf7 0%, var(--bg) 100%);
+				color: var(--text);
+				line-height: 1.65;
+			}
+
+			main {
+				max-width: 1100px;
+				margin: 0 auto;
+				padding: 56px 20px 88px;
+			}
+
+			header {
+				margin-bottom: 52px;
+			}
+
+			.eyebrow {
+				display: inline-block;
+				margin-bottom: 14px;
+				color: color-mix(in srgb, var(--accent-pop) 68%, var(--accent) 32%);
+				font-size: 0.82rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			h1,
+			h2,
+			h3 {
+				letter-spacing: -0.03em;
+				line-height: 1.1;
+				margin: 0 0 16px;
+			}
+
+			h1 {
+				max-width: 12ch;
+				font-size: clamp(1.7rem, 3.5vw, 2.7rem);
+				color: var(--text);
+			}
+
+			h2 {
+				font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+				color: var(--accent-pop);
+			}
+
+			h3 {
+				font-size: 0.88rem;
+				margin-bottom: 0;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				color: color-mix(in srgb, var(--accent-pop) 82%, var(--accent) 18%);
+			}
+
+			p,
+			li {
+				font-size: 1.01rem;
+			}
+
+			p {
+				max-width: 72ch;
+				margin: 0 0 16px;
+			}
+
+			.lead {
+				max-width: 63ch;
+				font-size: 1.1rem;
+				color: var(--muted);
+			}
+
+			section {
+				margin-top: 58px;
+			}
+
+			.comparison {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 18px;
+				margin-top: 24px;
+			}
+
+			.snippet header {
+				margin: 0 0 10px;
+				padding-bottom: 8px;
+				border-bottom: 1px solid var(--line);
+			}
+
+			.snippet p {
+				margin: 0;
+				font-size: 0.95rem;
+				color: var(--muted);
+			}
+
+			pre {
+				margin: 0;
+				padding: 18px;
+				overflow-x: auto;
+				border-radius: 18px;
+				background: var(--code-bg);
+				color: var(--code-text);
+				box-shadow: 0 14px 32px rgb(22 33 26 / 0.15);
+				font-size: 0.91rem;
+				line-height: 1.5;
+			}
+
+			code,
+			pre {
+				font-family:
+					Recursive, Berkeley Mono, ui-monospace, SFMono-Regular, Menlo, monospace;
+			}
+
+			.note {
+				margin: 22px 0 0;
+				padding: 16px 18px;
+				max-width: 72ch;
+				border-left: 4px solid var(--note-line);
+				border-radius: 14px;
+				background: var(--note-bg);
+			}
+
+			.rule-list {
+				padding-left: 20px;
+				max-width: 72ch;
+			}
+
+			.rule-list li + li {
+				margin-top: 10px;
+			}
+
+			strong {
+				color: color-mix(in srgb, var(--accent) 72%, var(--accent-pop) 28%);
+			}
+
+			.note strong {
+				color: var(--accent);
+			}
+
+			@media (max-width: 900px) {
+				.comparison {
+					grid-template-columns: 1fr;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<header>
+				<span class="eyebrow">Tutorial</span>
+				<h1>effect-query for Effect Atom developers</h1>
+				<p class="lead">
+					If you already like thinking in atoms, this library feels very natural.
+					You keep plain atoms for local state. You reach for query atoms when
+					the value should be fetched, cached, refreshed, and hydrated for you.
+				</p>
+				<p>
+					The nicest part is that you do not need to abandon the atom mental
+					model to get there. Server state does not become a separate universe.
+				</p>
+			</header>
+
+			<section>
+				<h2>The first mental shift is tiny</h2>
+				<p>
+					From the component's point of view, both values are atoms. The
+					difference is that a query atom comes with the server-state machinery
+					already attached.
+				</p>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>Plain local state.</p>
+						</header>
+						<pre><code>import * as Atom from "effect/unstable/reactivity/Atom";
+
+const countAtom = Atom.make(0);</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>Remote state with cache behavior attached.</p>
+						</header>
+						<pre><code>import { createQueryAtom, makeRuntime } from "effect-query";
+
+const queryRuntime = makeRuntime();
+
+const dashboardAtom = createQueryAtom({
+  runtime: queryRuntime,
+  key: ["dashboard"],
+  query: fetchDashboard,
+});</code></pre>
+					</article>
+				</div>
+				<aside class="note">
+					<strong>In practice:</strong> if the value is local, keep using a plain
+					atom. If it is remote and should be cached, promote it to a query atom.
+				</aside>
+			</section>
+
+			<section>
+				<h2>Parameterization becomes a factory</h2>
+				<p>
+					Plain atoms are still great for local selection. The new move is that
+					a parameterized remote read becomes a <strong>query atom factory</strong>.
+					Call it with an argument and you get the atom you want to read.
+				</p>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>Local state chooses what is active.</p>
+						</header>
+						<pre><code>const selectedUserIdAtom = Atom.make("42");
+
+const greetingAtom = Atom.make((get) => {
+  const userId = get(selectedUserIdAtom);
+  return `Hello ${userId}`;
+});</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>The same selection can drive a remote cached read.</p>
+						</header>
+						<pre><code>import { createQueryAtomFactory } from "effect-query";
+
+const userAtomFactory = createQueryAtomFactory({
+  runtime: queryRuntime,
+  key: (userId: string) => ["user", userId],
+  query: (userId: string) => fetchUser(userId),
+});
+
+const selectedUserIdAtom = Atom.make("42");
+
+const selectedUserAtom = Atom.make((get) =>
+  userAtomFactory(get(selectedUserIdAtom)),
+);</code></pre>
+					</article>
+				</div>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>Reading an atom in React.</p>
+						</header>
+						<pre><code>function Counter() {
+  const count = useAtomValue(countAtom);
+  return &lt;span&gt;{count}&lt;/span&gt;;
+}</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>Reading a query atom feels almost the same.</p>
+						</header>
+						<pre><code>import {
+  getFailureCause,
+  getSuccess,
+  isFailure,
+  isWaiting,
+} from "effect-query";
+import * as Option from "effect/Option";
+
+function DashboardScreen() {
+  const dashboard = useAtomValue(dashboardAtom);
+  const success = getSuccess(dashboard);
+
+  if (isWaiting(dashboard)) return &lt;Spinner /&gt;;
+  if (isFailure(dashboard)) {
+    return &lt;ErrorView error={getFailureCause(dashboard)} /&gt;;
+  }
+  if (Option.isSome(success)) {
+    return &lt;DashboardView dashboard={success.value} /&gt;;
+  }
+
+  return null;
+}</code></pre>
+					</article>
+				</div>
+			</section>
+
+			<section>
+				<h2>Writes split cleanly</h2>
+				<p>
+					The division of labor is refreshingly simple. Local writes stay as
+					writable atoms. Remote writes become mutations, because mutations know
+					how to invalidate matching query atoms afterward.
+				</p>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>Local write.</p>
+						</header>
+						<pre><code>const draftAtom = Atom.make("");
+
+const saveDraftAtom = Atom.make((get, set, body: string) => {
+  set(draftAtom, body.trim());
+});</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>Remote write.</p>
+						</header>
+						<pre><code>import { mutation } from "effect-query";
+
+const addCommentMutation = mutation({
+  runtime: queryRuntime,
+  run: (input: { taskId: string; body: string }) =>
+    DemoApi.use((api) => api.addComment(input)),
+  invalidate: (input) => ({
+    task: [input.taskId],
+  }),
+});</code></pre>
+					</article>
+				</div>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>Imperative registry writes.</p>
+						</header>
+						<pre><code>const registry = AtomRegistry.make();
+
+registry.set(draftAtom, "hello");
+const draft = registry.get(draftAtom);</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>Imperative cache writes on the factory.</p>
+						</header>
+						<pre><code>await Effect.runPromise(
+  taskAtomFactory.setData("task-1", (current) => {
+    const base = Option.getOrElse(current, () => emptyTask("task-1"));
+    return {
+      ...base,
+      title: "Optimistic title",
+    };
+  }),
+);
+
+const cachedTask = await Effect.runPromise(taskAtomFactory.peek("task-1"));</code></pre>
+					</article>
+				</div>
+				<aside class="note">
+					<strong>The nice payoff:</strong> local state and remote state still
+					feel related, but they stop pretending to be the same problem.
+				</aside>
+			</section>
+
+			<section>
+				<h2>You can use plain async atoms, but you probably should not</h2>
+				<p>
+					Yes, you can model remote data with plain atoms. The catch is that you
+					then inherit all the boring parts: cache identity, freshness, retries,
+					invalidation, hydration, and imperative cache helpers. Query atoms
+					exist to take that burden off your plate.
+				</p>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>It works, but you own the server-state details now.</p>
+						</header>
+						<pre><code>const userAtom = Atom.make((get) =>
+  Effect.promise(() =>
+    fetch(`/api/users/${get(userIdAtom)}`).then((r) => r.json()),
+  ),
+);</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>The runtime and factory take care of the extra machinery.</p>
+						</header>
+						<pre><code>const userAtomFactory = createQueryAtomFactory({
+  runtime: queryRuntime,
+  key: (userId: string) => ["user", userId],
+  policy: {
+    staleTime: "1 hour",
+  },
+  reactivityKeys: (userId: string) => ({
+    user: [userId],
+  }),
+  query: (userId: string) => fetchUser(userId),
+});</code></pre>
+					</article>
+				</div>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>Plain atoms usually do not need shared runtime setup.</p>
+						</header>
+						<pre><code>const searchTextAtom = Atom.make("");</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>Query atoms do, because remote state needs a shared cache home.</p>
+						</header>
+						<pre><code>const queryRuntime = makeRuntime(DemoApiLive);
+
+const taskAtomFactory = createQueryAtomFactory({
+  runtime: queryRuntime,
+  key: (taskId: string) => ["task", taskId],
+  reactivityKeys: (taskId: string) => ({
+    task: [taskId],
+  }),
+  query: (taskId: string) =>
+    DemoApi.use((api) => api.getTask(taskId)),
+});</code></pre>
+					</article>
+				</div>
+			</section>
+
+			<section>
+				<h2>The short version</h2>
+				<ul class="rule-list">
+					<li>
+						Keep plain atoms for local state, derived state, and local writes.
+					</li>
+					<li>
+						Use a query atom when the value should be fetched and cached.
+					</li>
+					<li>
+						Use a query atom factory when that remote read is parameterized.
+					</li>
+					<li>
+						Use a mutation when a remote write should invalidate matching query
+						atoms.
+					</li>
+				</ul>
+			</section>
+		</main>
+	</body>
+</html>
