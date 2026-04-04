@@ -10,7 +10,7 @@ import {
 	createQueryAtomFactory,
 	makeRuntime,
 	mutation,
-} from "../../../../index.ts";
+} from "../../../../src/index.ts";
 
 export type TaskStatus = "planned" | "active" | "done";
 export type TaskFilter = "all" | TaskStatus;

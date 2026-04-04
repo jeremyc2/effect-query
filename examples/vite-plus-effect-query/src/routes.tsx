@@ -11,7 +11,7 @@ import {
 	isInitial,
 	isSuccess,
 	isWaiting,
-} from "../../../index.ts";
+} from "../../../src/index.ts";
 import { useDemo } from "./demo/context.tsx";
 import {
 	useAtomSet,
