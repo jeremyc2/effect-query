@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import {
 	dehydrate,
@@ -183,6 +184,128 @@ describe("effect-query", () => {
 		expect(current.value).toBe("1:seeded");
 		expect(calls).toBe(0);
 		release();
+	});
+
+	test("optimistic setData stays visible until invalidation refetch resolves", async () => {
+		const runtime = makeRuntime();
+		interface Comment {
+			readonly id: string;
+			readonly body: string;
+		}
+		interface Task {
+			readonly id: string;
+			readonly comments: ReadonlyArray<Comment>;
+		}
+
+		let nextCommentId = 2;
+		let task: Task = {
+			id: "task-1",
+			comments: [{ id: "comment-1", body: "Original comment" }],
+		};
+		const loadTask = Effect.fnUntraced(function* (taskId: string) {
+			yield* Effect.sleep("20 millis");
+			return task.id === taskId ? task : { id: taskId, comments: [] };
+		});
+		const persistComment = Effect.fnUntraced(function* (input: {
+			readonly taskId: string;
+			readonly body: string;
+		}) {
+			yield* Effect.sleep("10 millis");
+			task = {
+				...task,
+				comments: [
+					...task.comments,
+					{
+						id: `comment-${nextCommentId}`,
+						body: input.body,
+					},
+				],
+			};
+			nextCommentId += 1;
+			return task;
+		});
+
+		const taskQuery = family({
+			runtime,
+			key: (taskId: string) => ["task", taskId],
+			policy: {
+				staleTime: "1 hour",
+			},
+			reactivityKeys: (taskId: string) => ({
+				task: [taskId],
+			}),
+			query: loadTask,
+		});
+
+		const addComment = mutation({
+			runtime,
+			run: persistComment,
+			invalidate: (input) => ({
+				task: [input.taskId],
+			}),
+		});
+
+		const registry = AtomRegistry.make();
+		const atom = taskQuery("task-1");
+		const releaseQuery = registry.mount(atom);
+		const releaseMutation = registry.mount(addComment);
+
+		await Effect.runPromise(
+			AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
+		);
+
+		await Effect.runPromise(
+			taskQuery.setData("task-1", (current) => {
+				const base = Option.getOrElse(current, () => task);
+				return {
+					...base,
+					comments: [
+						...base.comments,
+						{
+							id: "optimistic-comment",
+							body: "Optimistic comment",
+						},
+					],
+				};
+			}),
+		);
+
+		const optimistic = registry.get(atom);
+		assertSuccess(optimistic);
+		expect(optimistic.value.comments.at(-1)).toEqual({
+			id: "optimistic-comment",
+			body: "Optimistic comment",
+		});
+
+		registry.set(addComment, {
+			taskId: "task-1",
+			body: "Optimistic comment",
+		});
+		await Effect.runPromise(
+			AtomRegistry.getResult(registry, addComment, {
+				suspendOnWaiting: true,
+			}),
+		);
+		await Effect.runPromise(Effect.sleep("0 millis"));
+
+		const duringRefetch = registry.get(atom);
+		assertSuccess(duringRefetch);
+		expect(duringRefetch.waiting).toBe(true);
+		expect(duringRefetch.value.comments.at(-1)).toEqual({
+			id: "optimistic-comment",
+			body: "Optimistic comment",
+		});
+
+		const resolved = await Effect.runPromise(
+			AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
+		);
+		expect(resolved.comments.at(-1)).toEqual({
+			id: "comment-2",
+			body: "Optimistic comment",
+		});
+
+		releaseMutation();
+		releaseQuery();
 	});
 
 	test("hydrates successful query snapshots into a fresh registry", async () => {
