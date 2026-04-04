@@ -1,5 +1,7 @@
 import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -7,14 +9,19 @@ import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as ServiceMap from "effect/ServiceMap";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import {
 	applyDataUpdater,
+	failureQueryResult,
+	fromExitWithPrevious,
 	getCurrentSuccess,
 	hashQueryKey,
+	initialQueryResult,
+	isInterruptedCause,
 	needsRefetchBase,
 	resolveCompletedResult,
+	successQueryResult,
 	toReactivityHashSet,
+	waitingFromPrevious,
 } from "./core.ts";
 import type {
 	DataUpdater,
@@ -54,6 +61,10 @@ export class QueryStore extends ServiceMap.Service<
 			definition: InternalQuery<Arg, A, E, R>,
 			arg: Arg,
 		) => Effect.Effect<A, E, R>;
+		readonly cancel: <Arg, A, E, R>(
+			definition: InternalQuery<Arg, A, E, R>,
+			arg: Arg,
+		) => Effect.Effect<void>;
 		readonly setData: <Arg, A, E, R>(
 			definition: InternalQuery<Arg, A, E, R>,
 			arg: Arg,
@@ -61,6 +72,7 @@ export class QueryStore extends ServiceMap.Service<
 		) => Effect.Effect<A, never, R>;
 		readonly invalidate: (keys: ReactivityKeySet) => Effect.Effect<void>;
 		readonly onFocus: Effect.Effect<void>;
+		readonly onOffline: Effect.Effect<void>;
 		readonly onOnline: Effect.Effect<void>;
 	}
 >()("effect-query/effect-query/store/QueryStore") {}
@@ -70,6 +82,16 @@ export const QueryStoreLayer = Layer.effect(
 	Effect.gen(function* () {
 		const storeScope = yield* Effect.scope;
 		const entries = new Set<QueryEntryBase>();
+		let online = true;
+		let onlineSignal = yield* Deferred.make<void>();
+		yield* Deferred.succeed(onlineSignal, undefined);
+
+		const waitForOnline = Effect.fnUntraced(function* () {
+			if (online) {
+				return;
+			}
+			yield* Deferred.await(onlineSignal);
+		});
 
 		const pruneExpired = Effect.fnUntraced(function* (now: number) {
 			for (const entry of entries) {
@@ -77,17 +99,25 @@ export const QueryStoreLayer = Layer.effect(
 					continue;
 				}
 
-				const ttl = entry.policy.idleTimeToLiveMs;
+				const ttl = entry.policy.gcTimeMs;
 				if (now - entry.lastInactiveAt < ttl) {
 					continue;
 				}
 
 				const inFlight = entry.inFlight;
+				const poller = entry.poller;
+				const abortController = entry.abortController;
 				entry.inFlight = undefined;
+				entry.poller = undefined;
+				entry.abortController = undefined;
 				entry.remove();
 				entries.delete(entry);
+				abortController?.abort();
 				if (inFlight !== undefined) {
 					yield* Fiber.interrupt(inFlight);
+				}
+				if (poller !== undefined) {
+					yield* Fiber.interrupt(poller);
 				}
 			}
 		});
@@ -104,20 +134,33 @@ export const QueryStoreLayer = Layer.effect(
 
 			const runQuery = yield* Effect.servicesWith(
 				(services: ServiceMap.ServiceMap<R>) =>
-					Effect.succeed(
-						Effect.suspend(() => {
-							let fetchEffect: Effect.Effect<A, E, R> = definition.query(arg);
-							if (definition.policy.retry !== undefined) {
-								fetchEffect = fetchEffect.pipe(
-									Effect.retry(definition.policy.retry),
-								);
-							}
-							return Effect.provideServices(fetchEffect, services);
-						}),
-					),
+					Effect.succeed((abortController: AbortController) => {
+						const key = definition.key(arg);
+						let fetchEffect: Effect.Effect<A, E, R> = definition.query(arg, {
+							queryKey: key,
+							signal: abortController.signal,
+						});
+						if (definition.policy.retry !== undefined) {
+							fetchEffect = fetchEffect.pipe(
+								Effect.retry(definition.policy.retry),
+							);
+						}
+						return Effect.provideServices(fetchEffect, services).pipe(
+							Effect.onInterrupt(() =>
+								Effect.sync(() => abortController.abort()),
+							),
+						);
+					}),
 			);
+			const initialData = definition.initialData(arg);
+			const initialDataTimestamp = yield* Clock.currentTimeMillis;
 			const resultRef = yield* SubscriptionRef.make<QueryResult<A, E>>(
-				AsyncResult.initial(),
+				initialData === undefined
+					? initialQueryResult()
+					: successQueryResult(initialData, {
+							timestamp:
+								definition.initialDataUpdatedAt(arg) ?? initialDataTimestamp,
+						}),
 			);
 			const lock = yield* Semaphore.make(1);
 			const key = definition.key(arg);
@@ -131,20 +174,31 @@ export const QueryStoreLayer = Layer.effect(
 
 						const current = entry.current();
 						yield* entry.setResult(
-							Option.some(current).pipe(AsyncResult.waitingFrom),
+							Option.some(current).pipe(waitingFromPrevious),
 						);
+						if (entry.policy.networkMode === "online" && !online) {
+							entry.paused = true;
+							return undefined;
+						}
 
-						const fiber = yield* entry.runQuery.pipe(
+						const abortController = new AbortController();
+						const previous = current;
+						const fiber = yield* entry.runQuery(abortController).pipe(
 							Effect.onExit((exit) =>
 								Effect.gen(function* () {
-									const previous = entry.current();
 									entry.inFlight = undefined;
+									entry.abortController = undefined;
 									entry.invalidated = false;
+									entry.paused = false;
+									if (Exit.isFailure(exit) && isInterruptedCause(exit.cause)) {
+										const next = previous.isPending
+											? initialQueryResult()
+											: previous;
+										yield* entry.setResult(next);
+										return;
+									}
 									yield* entry.setResult(
-										AsyncResult.fromExitWithPrevious(
-											exit,
-											Option.some(previous),
-										),
+										fromExitWithPrevious(exit, Option.some(previous)),
 									);
 								}),
 							),
@@ -152,6 +206,7 @@ export const QueryStoreLayer = Layer.effect(
 						);
 
 						entry.inFlight = fiber;
+						entry.abortController = abortController;
 						return fiber;
 					}),
 				);
@@ -165,6 +220,7 @@ export const QueryStoreLayer = Layer.effect(
 				resultRef,
 				policy: definition.policy,
 				reactivityHashes: toReactivityHashSet(definition.reactivityKeys(arg)),
+				isEnabled: () => definition.enabled(arg),
 				lock,
 				snapshot: () => SubscriptionRef.getUnsafe(resultRef),
 				current: () => SubscriptionRef.getUnsafe(resultRef),
@@ -172,31 +228,95 @@ export const QueryStoreLayer = Layer.effect(
 				triggerFetch: startFetch().pipe(Effect.asVoid),
 				remove: () => {
 					entry.inFlight = undefined;
+					entry.poller = undefined;
+					entry.abortController = undefined;
 					definition.entries.delete(hash);
 				},
 				activeCount: 0,
 				invalidated: false,
 				lastInactiveAt: undefined,
 				inFlight: undefined,
+				poller: undefined,
+				abortController: undefined,
+				paused: false,
 			};
 			definition.entries.set(hash, entry);
 			entries.add(entry);
 			return entry;
 		});
 
+		const stopPollingForEntry = Effect.fnUntraced(function* (
+			entry: QueryEntryBase,
+		) {
+			if (entry.poller === undefined) {
+				return;
+			}
+			const poller = entry.poller;
+			entry.poller = undefined;
+			yield* Fiber.interrupt(poller);
+		});
+
+		const startPollingForEntry = Effect.fnUntraced(function* <Arg, A, E, R>(
+			entry: QueryEntry<Arg, A, E, R>,
+		) {
+			const intervalMs = entry.policy.refetchIntervalMs;
+			if (
+				intervalMs === undefined ||
+				entry.activeCount === 0 ||
+				!entry.isEnabled()
+			) {
+				yield* stopPollingForEntry(entry);
+				return;
+			}
+			if (entry.poller !== undefined) {
+				return;
+			}
+
+			const poller = yield* Effect.gen(function* () {
+				while (entry.activeCount > 0) {
+					yield* Effect.sleep(`${Math.max(1, intervalMs)} millis`);
+					if (entry.activeCount === 0) {
+						return;
+					}
+					if (!entry.isEnabled()) {
+						continue;
+					}
+					if (entry.policy.networkMode === "online" && !online) {
+						entry.paused = true;
+						continue;
+					}
+					yield* entry.triggerFetch;
+				}
+			}).pipe(Effect.forkIn(storeScope));
+
+			entry.poller = poller;
+		});
+
+		const restoreCancelledResult = <A, E>(
+			result: QueryResult<A, E>,
+		): QueryResult<A, E> => {
+			if (result.isPending) {
+				return initialQueryResult();
+			}
+			if (result.isSuccess) {
+				return successQueryResult(result.data, {
+					timestamp: result.dataUpdatedAt,
+				});
+			}
+			return failureQueryResult(result.failureCause, {
+				previousSuccess: result.previousSuccess,
+			});
+		};
+
 		const needsRefetch = <Arg, A, E, R>(
 			entry: QueryEntry<Arg, A, E, R>,
 			now: number,
 		): boolean => {
 			const current = entry.snapshot();
-			if (
-				entry.invalidated ||
-				AsyncResult.isInitial(current) ||
-				AsyncResult.isFailure(current)
-			) {
+			if (entry.invalidated || current.isPending || current.isError) {
 				return true;
 			}
-			return now - current.timestamp >= entry.policy.staleTimeMs;
+			return now - current.dataUpdatedAt >= entry.policy.staleTimeMs;
 		};
 
 		const touch = Effect.fnUntraced(function* <Arg, A, E, R>(
@@ -205,12 +325,15 @@ export const QueryStoreLayer = Layer.effect(
 		) {
 			const now = yield* Clock.currentTimeMillis;
 			yield* pruneExpired(now);
+			const isEnabled = entry.isEnabled();
 
 			const shouldFetch =
 				reason === "refresh" ||
 				reason === "ensure" ||
 				reason === "prefetch" ||
-				(reason === "mount" && entry.definition.policy.refetchOnMount);
+				(reason === "mount" &&
+					isEnabled &&
+					entry.definition.policy.refetchOnMount);
 
 			if (!shouldFetch || !needsRefetch(entry, now)) {
 				return;
@@ -227,14 +350,19 @@ export const QueryStoreLayer = Layer.effect(
 			yield* pruneExpired(now);
 
 			const entry = yield* getOrCreate(definition, arg);
+			const wasInactive = entry.activeCount === 0;
 			entry.activeCount += 1;
 			entry.lastInactiveAt = undefined;
+			if (wasInactive && entry.isEnabled()) {
+				yield* startPollingForEntry(entry);
+			}
 
 			yield* Effect.addFinalizer((_exit) =>
 				Effect.gen(function* () {
 					entry.activeCount = Math.max(0, entry.activeCount - 1);
 					if (entry.activeCount === 0) {
 						entry.lastInactiveAt = yield* Clock.currentTimeMillis;
+						yield* stopPollingForEntry(entry);
 					}
 				}),
 			);
@@ -243,7 +371,10 @@ export const QueryStoreLayer = Layer.effect(
 			return entry.resultRef;
 		});
 
-		const ensure = Effect.fnUntraced(function* <Arg, A, E, R>(
+		const ensure: <Arg, A, E, R>(
+			definition: InternalQuery<Arg, A, E, R>,
+			arg: Arg,
+		) => Effect.Effect<A, E, R> = Effect.fnUntraced(function* <Arg, A, E, R>(
 			definition: InternalQuery<Arg, A, E, R>,
 			arg: Arg,
 		) {
@@ -252,11 +383,15 @@ export const QueryStoreLayer = Layer.effect(
 
 			const entry = yield* getOrCreate(definition, arg);
 			const current = entry.current();
-			if (!needsRefetch(entry, now) && AsyncResult.isSuccess(current)) {
-				return current.value;
+			if (!needsRefetch(entry, now) && current.isSuccess) {
+				return current.data;
 			}
 
 			yield* entry.triggerFetch;
+			if (entry.paused) {
+				yield* waitForOnline();
+				return yield* ensure(definition, arg);
+			}
 			const fiber = entry.inFlight;
 			if (fiber === undefined) {
 				return yield* resolveCompletedResult(entry.current());
@@ -273,7 +408,10 @@ export const QueryStoreLayer = Layer.effect(
 				Effect.catchCause(() => Effect.void),
 			);
 
-		const refresh = Effect.fnUntraced(function* <Arg, A, E, R>(
+		const refresh: <Arg, A, E, R>(
+			definition: InternalQuery<Arg, A, E, R>,
+			arg: Arg,
+		) => Effect.Effect<A, E, R> = Effect.fnUntraced(function* <Arg, A, E, R>(
 			definition: InternalQuery<Arg, A, E, R>,
 			arg: Arg,
 		) {
@@ -282,11 +420,40 @@ export const QueryStoreLayer = Layer.effect(
 
 			const entry = yield* getOrCreate(definition, arg);
 			yield* entry.triggerFetch;
+			if (entry.paused) {
+				yield* waitForOnline();
+				return yield* refresh(definition, arg);
+			}
 			const fiber = entry.inFlight;
 			if (fiber === undefined) {
 				return yield* resolveCompletedResult(entry.current());
 			}
 			return yield* Fiber.join(fiber);
+		});
+
+		const cancel = Effect.fnUntraced(function* <Arg, A, E, R>(
+			definition: InternalQuery<Arg, A, E, R>,
+			arg: Arg,
+		) {
+			const entry = definition.entries.get(hashQueryKey(definition.key(arg)));
+			if (entry === undefined) {
+				return;
+			}
+
+			entry.paused = false;
+			entry.invalidated = false;
+			const inFlight = entry.inFlight;
+			const abortController = entry.abortController;
+			entry.inFlight = undefined;
+			entry.abortController = undefined;
+			yield* entry.setResult(restoreCancelledResult(entry.current()));
+			abortController?.abort();
+			if (inFlight !== undefined) {
+				yield* Fiber.interrupt(inFlight).pipe(
+					Effect.forkIn(storeScope),
+					Effect.asVoid,
+				);
+			}
 		});
 
 		const peek = <Arg, A, E, R>(
@@ -311,7 +478,7 @@ export const QueryStoreLayer = Layer.effect(
 			const next = applyDataUpdater(updater, getCurrentSuccess(current));
 
 			entry.invalidated = false;
-			yield* entry.setResult(AsyncResult.success(next, { timestamp: now }));
+			yield* entry.setResult(successQueryResult(next, { timestamp: now }));
 			return next;
 		});
 
@@ -328,7 +495,7 @@ export const QueryStoreLayer = Layer.effect(
 				for (const hash of invalidatedHashes) {
 					if (entry.reactivityHashes.has(hash)) {
 						entry.invalidated = true;
-						if (entry.activeCount > 0) {
+						if (entry.activeCount > 0 && entry.isEnabled()) {
 							activeEntries.add(entry);
 						}
 						break;
@@ -355,12 +522,33 @@ export const QueryStoreLayer = Layer.effect(
 						? entry.policy.refetchOnWindowFocus
 						: entry.policy.refetchOnReconnect;
 
-				if (!enabled || !needsRefetchBase(entry, now)) {
+				if (!enabled || !entry.isEnabled() || !needsRefetchBase(entry, now)) {
 					continue;
 				}
 
 				yield* entry.triggerFetch;
 			}
+		});
+
+		const setOnline = Effect.fnUntraced(function* (nextOnline: boolean) {
+			if (nextOnline === online) {
+				return;
+			}
+
+			online = nextOnline;
+			if (nextOnline) {
+				yield* Deferred.succeed(onlineSignal, undefined);
+				for (const entry of entries) {
+					if (!entry.paused || !entry.isEnabled()) {
+						continue;
+					}
+					yield* entry.triggerFetch;
+				}
+				yield* refetchActive("reconnect");
+				return;
+			}
+
+			onlineSignal = yield* Deferred.make<void>();
 		});
 
 		return QueryStore.of({
@@ -369,10 +557,12 @@ export const QueryStoreLayer = Layer.effect(
 			peek,
 			prefetch,
 			refresh,
+			cancel,
 			setData,
 			invalidate: invalidateEntries,
 			onFocus: refetchActive("window-focus"),
-			onOnline: refetchActive("reconnect"),
+			onOffline: setOnline(false),
+			onOnline: setOnline(true),
 		});
 	}),
 );

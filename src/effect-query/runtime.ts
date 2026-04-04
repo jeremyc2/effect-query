@@ -57,23 +57,25 @@ export const provideRuntime = <A, E, R = never>(
 		return Effect.die(new QueryRuntimeMetadataMissingError());
 	}
 
-	return runtime[QueryRuntimeStateId].lock.withPermit(
-		Effect.gen(function* () {
-			const state = runtime[QueryRuntimeStateId];
-			const services = Option.isSome(state.services)
-				? state.services.value
-				: yield* Layer.buildWithMemoMap(
-						runtime[QueryRuntimeLayerId],
-						runtime.factory.memoMap,
-						state.scope,
-					).pipe(
-						Effect.tap((built) =>
-							Effect.sync(() => {
-								state.services = Option.some(built);
-							}),
-						),
-					);
-			return yield* Effect.provideServices(effect, services);
-		}),
-	);
+	return Effect.gen(function* () {
+		const state = runtime[QueryRuntimeStateId];
+		const services = yield* state.lock.withPermit(
+			Effect.gen(function* () {
+				return Option.isSome(state.services)
+					? state.services.value
+					: yield* Layer.buildWithMemoMap(
+							runtime[QueryRuntimeLayerId],
+							runtime.factory.memoMap,
+							state.scope,
+						).pipe(
+							Effect.tap((built) =>
+								Effect.sync(() => {
+									state.services = Option.some(built);
+								}),
+							),
+						);
+			}),
+		);
+		return yield* Effect.provideServices(effect, services);
+	});
 };

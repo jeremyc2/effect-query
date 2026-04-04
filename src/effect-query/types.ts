@@ -1,3 +1,4 @@
+import type * as Cause from "effect/Cause";
 import type * as Duration from "effect/Duration";
 import type * as Effect from "effect/Effect";
 import type * as Fiber from "effect/Fiber";
@@ -16,10 +17,67 @@ import type { QueryStore } from "./store.ts";
 
 export type QueryHash = string;
 export type QueryKey = ReadonlyArray<unknown>;
+export type QueryNetworkMode = "online" | "always" | "offlineFirst";
 export type ReactivityKeySet =
 	| ReadonlyArray<unknown>
 	| Readonly<Record<string, ReadonlyArray<unknown>>>;
-export type QueryResult<A, E> = AsyncResult.AsyncResult<A, E>;
+export type QueryEnabled<Arg> = boolean | ((arg: Arg) => boolean);
+export type QueryInitialData<Arg, A> = A | ((arg: Arg) => A);
+export type QueryInitialDataUpdatedAt<Arg> =
+	| number
+	| ((arg: Arg) => number | undefined);
+export type QueryPlaceholderData<Arg, A> =
+	| A
+	| ((arg: Arg, previousValue: A | undefined) => A);
+export interface QueryPending<A, E = never> extends AsyncResult.Initial<A, E> {
+	readonly status: "pending";
+	readonly fetchStatus: "fetching" | "idle";
+	readonly isPending: true;
+	readonly isSuccess: false;
+	readonly isError: false;
+	readonly isFetching: boolean;
+	readonly isRefetching: false;
+	readonly data: undefined;
+	readonly error: undefined;
+	readonly failureCause: undefined;
+	readonly dataUpdatedAt: 0;
+	readonly valueOrUndefined: undefined;
+}
+
+export interface QuerySuccess<A, E = never> extends AsyncResult.Success<A, E> {
+	readonly status: "success";
+	readonly fetchStatus: "fetching" | "idle";
+	readonly isPending: false;
+	readonly isSuccess: true;
+	readonly isError: false;
+	readonly isFetching: boolean;
+	readonly isRefetching: boolean;
+	readonly data: A;
+	readonly error: undefined;
+	readonly failureCause: undefined;
+	readonly dataUpdatedAt: number;
+	readonly valueOrUndefined: A;
+}
+
+export interface QueryFailure<A, E = never> extends AsyncResult.Failure<A, E> {
+	readonly status: "error";
+	readonly fetchStatus: "fetching" | "idle";
+	readonly isPending: false;
+	readonly isSuccess: false;
+	readonly isError: true;
+	readonly isFetching: boolean;
+	readonly isRefetching: boolean;
+	readonly data: A | undefined;
+	readonly error: E | undefined;
+	readonly failureCause: Cause.Cause<E>;
+	readonly dataUpdatedAt: number;
+	readonly valueOrUndefined: A | undefined;
+}
+
+export type QueryResult<A, E> =
+	| QueryPending<A, E>
+	| QuerySuccess<A, E>
+	| QueryFailure<A, E>;
 export type QueryCodec<A, E> = Schema.Codec<
 	QueryResult<A | never, E | never>,
 	unknown
@@ -30,21 +88,21 @@ export type QueryRuntime<R = never, E = never> = Atom.AtomRuntime<
 >;
 export type DataUpdater<A> = A | ((current: Option.Option<A>) => A);
 
-export interface QueryPolicy<E = never, R = never> {
-	readonly staleTime?: Duration.Input | undefined;
-	readonly gcTime?: Duration.Input | undefined;
-	readonly idleTimeToLive?: Duration.Input | undefined;
-	readonly retry?: Schedule.Schedule<unknown, E, never, R> | undefined;
-	readonly refetchOnMount?: boolean | undefined;
-	readonly refetchOnWindowFocus?: boolean | undefined;
-	readonly refetchOnReconnect?: boolean | undefined;
+export interface QueryFunctionContext {
+	readonly queryKey: QueryKey;
+	readonly signal: AbortSignal;
 }
 
-interface QueryAtomFactorySharedOptions<Arg, A, E = never, R = never> {
+export interface QueryAtomFactoryOptions<Arg, A, E = never, R = never> {
 	readonly runtime?: QueryRuntime<R> | undefined;
 	readonly staleTime?: Duration.Input | undefined;
 	readonly gcTime?: Duration.Input | undefined;
-	readonly idleTimeToLive?: Duration.Input | undefined;
+	readonly networkMode?: QueryNetworkMode | undefined;
+	readonly refetchInterval?: Duration.Input | false | undefined;
+	readonly enabled?: QueryEnabled<Arg> | undefined;
+	readonly initialData?: QueryInitialData<Arg, A> | undefined;
+	readonly initialDataUpdatedAt?: QueryInitialDataUpdatedAt<Arg> | undefined;
+	readonly placeholderData?: QueryPlaceholderData<Arg, A> | undefined;
 	readonly retry?: Schedule.Schedule<unknown, E, never, R> | undefined;
 	readonly refetchOnMount?: boolean | undefined;
 	readonly refetchOnWindowFocus?: boolean | undefined;
@@ -52,39 +110,14 @@ interface QueryAtomFactorySharedOptions<Arg, A, E = never, R = never> {
 	readonly reactivityKeys?:
 		| ((arg: Arg) => ReactivityKeySet | undefined)
 		| undefined;
-	readonly policy?: QueryPolicy<E, R> | undefined;
+	readonly queryKey: (arg: Arg) => QueryKey;
+	readonly queryFn: (
+		arg: Arg,
+		context: QueryFunctionContext,
+	) => Effect.Effect<A, E, R>;
 	readonly label?: string | ((arg: Arg) => string) | undefined;
 	readonly schema?: QueryCodec<A, E> | undefined;
 }
-
-type QueryAtomFactoryKeyOptions<Arg> =
-	| {
-			readonly queryKey: (arg: Arg) => QueryKey;
-			readonly key?: (arg: Arg) => QueryKey;
-	  }
-	| {
-			readonly key: (arg: Arg) => QueryKey;
-			readonly queryKey?: (arg: Arg) => QueryKey;
-	  };
-
-type QueryAtomFactoryFnOptions<Arg, A, E = never, R = never> =
-	| {
-			readonly queryFn: (arg: Arg) => Effect.Effect<A, E, R>;
-			readonly query?: (arg: Arg) => Effect.Effect<A, E, R>;
-	  }
-	| {
-			readonly query: (arg: Arg) => Effect.Effect<A, E, R>;
-			readonly queryFn?: (arg: Arg) => Effect.Effect<A, E, R>;
-	  };
-
-export type QueryAtomFactoryOptions<
-	Arg,
-	A,
-	E = never,
-	R = never,
-> = QueryAtomFactorySharedOptions<Arg, A, E, R> &
-	QueryAtomFactoryKeyOptions<Arg> &
-	QueryAtomFactoryFnOptions<Arg, A, E, R>;
 
 export interface QueryAtomFactory<Arg, A, E = never> {
 	(arg: Arg): Atom.Atom<QueryResult<A, E>>;
@@ -94,6 +127,7 @@ export interface QueryAtomFactory<Arg, A, E = never> {
 	readonly ensure: (arg: Arg) => Effect.Effect<A, E>;
 	readonly peek: (arg: Arg) => Effect.Effect<Option.Option<QueryResult<A, E>>>;
 	readonly refresh: (arg: Arg) => Effect.Effect<A, E>;
+	readonly cancel: (arg: Arg) => Effect.Effect<void>;
 	readonly setData: (arg: Arg, updater: DataUpdater<A>) => Effect.Effect<A>;
 }
 
@@ -104,6 +138,7 @@ export interface QueryAtom<A, E = never> extends Atom.Atom<QueryResult<A, E>> {
 	readonly ensure: () => Effect.Effect<A, E>;
 	readonly peek: () => Effect.Effect<Option.Option<QueryResult<A, E>>>;
 	readonly refresh: () => Effect.Effect<A, E>;
+	readonly cancel: () => Effect.Effect<void>;
 	readonly setData: (updater: DataUpdater<A>) => Effect.Effect<A>;
 }
 
@@ -114,6 +149,46 @@ export type QueryOptions<
 	E = never,
 	R = never,
 > = QueryAtomFactoryOptions<Arg, A, E, R>;
+
+export type MutationAtom<Arg, A, E = never> = Atom.AtomResultFn<Arg, A, E>;
+
+export interface MutationAtomFactoryOptions<
+	FactoryArg,
+	Arg,
+	A,
+	E = never,
+	R = never,
+> {
+	readonly runtime?: QueryRuntime<R> | undefined;
+	readonly mutationKey?:
+		| QueryKey
+		| ((arg: FactoryArg) => QueryKey | undefined)
+		| undefined;
+	readonly invalidate?:
+		| ((
+				factoryArg: FactoryArg,
+				arg: Arg,
+				result: A,
+		  ) => ReactivityKeySet | undefined)
+		| undefined;
+	readonly onSuccess?:
+		| ((
+				factoryArg: FactoryArg,
+				result: A,
+				arg: Arg,
+		  ) => Effect.Effect<void, never, QueryStore | Reactivity.Reactivity>)
+		| undefined;
+	readonly concurrent?: boolean | undefined;
+	readonly initialValue?: A | undefined;
+	readonly mutationFn: (
+		factoryArg: FactoryArg,
+		arg: Arg,
+	) => Effect.Effect<A, E, R>;
+}
+
+export type MutationAtomFactory<FactoryArg, Arg, A, E = never> = (
+	arg: FactoryArg,
+) => MutationAtom<Arg, A, E>;
 
 interface MutationSharedOptions<Arg, A, R = never> {
 	readonly runtime?: QueryRuntime<R> | undefined;
@@ -131,22 +206,14 @@ interface MutationSharedOptions<Arg, A, R = never> {
 	readonly initialValue?: A | undefined;
 }
 
-type MutationFnOptions<Arg, A, E = never, R = never> =
-	| {
-			readonly mutationFn: (arg: Arg) => Effect.Effect<A, E, R>;
-			readonly run?: (arg: Arg) => Effect.Effect<A, E, R>;
-	  }
-	| {
-			readonly run: (arg: Arg) => Effect.Effect<A, E, R>;
-			readonly mutationFn?: (arg: Arg) => Effect.Effect<A, E, R>;
-	  };
-
 export type MutationOptions<
 	Arg,
 	A,
 	E = never,
 	R = never,
-> = MutationSharedOptions<Arg, A, R> & MutationFnOptions<Arg, A, E, R>;
+> = MutationSharedOptions<Arg, A, R> & {
+	readonly mutationFn: (arg: Arg) => Effect.Effect<A, E, R>;
+};
 
 export type QueryAtomFactoryInput<Arg, A, E, R> =
 	| QueryAtomFactoryOptions<Arg, A, E, never>
@@ -160,42 +227,47 @@ export type MutationInput<Arg, A, E, R> =
 			readonly runtime: QueryRuntime<R>;
 	  });
 
-type CreateQueryAtomSharedOptions<A, E, R> = Omit<
-	QueryAtomFactorySharedOptions<void, A, E, R>,
-	"runtime"
+type CreateMutationAtomFactorySharedOptions<FactoryArg, Arg, A, E, R> = Omit<
+	MutationAtomFactoryOptions<FactoryArg, Arg, A, E, R>,
+	"runtime" | "mutationFn"
 >;
 
-type CreateQueryAtomKeyOptions =
-	| {
-			readonly queryKey: QueryKey;
-			readonly key?: QueryKey;
-	  }
-	| {
-			readonly key: QueryKey;
-			readonly queryKey?: QueryKey;
-	  };
+export type MutationAtomFactoryInput<FactoryArg, Arg, A, E, R> =
+	| (CreateMutationAtomFactorySharedOptions<FactoryArg, Arg, A, E, never> & {
+			readonly mutationFn: (
+				factoryArg: FactoryArg,
+				arg: Arg,
+			) => Effect.Effect<A, E, never>;
+			readonly runtime?: undefined;
+	  })
+	| (CreateMutationAtomFactorySharedOptions<FactoryArg, Arg, A, E, R> & {
+			readonly mutationFn: (
+				factoryArg: FactoryArg,
+				arg: Arg,
+			) => Effect.Effect<A, E, R>;
+			readonly runtime: QueryRuntime<R>;
+	  });
 
-type CreateQueryAtomFnOptions<A, E, R> =
-	| {
-			readonly queryFn: Effect.Effect<A, E, R>;
-			readonly query?: Effect.Effect<A, E, R>;
-	  }
-	| {
-			readonly query: Effect.Effect<A, E, R>;
-			readonly queryFn?: Effect.Effect<A, E, R>;
-	  };
+type CreateQueryAtomSharedOptions<A, E, R> = Omit<
+	QueryAtomFactoryOptions<void, A, E, R>,
+	"runtime" | "queryKey" | "queryFn"
+>;
 
 export type CreateQueryAtomInput<A, E, R> =
-	| (CreateQueryAtomSharedOptions<A, E, never> &
-			CreateQueryAtomKeyOptions &
-			CreateQueryAtomFnOptions<A, E, never> & {
-				readonly runtime?: undefined;
-			})
-	| (CreateQueryAtomSharedOptions<A, E, R> &
-			CreateQueryAtomKeyOptions &
-			CreateQueryAtomFnOptions<A, E, R> & {
-				readonly runtime: QueryRuntime<R>;
-			});
+	| (CreateQueryAtomSharedOptions<A, E, never> & {
+			readonly queryKey: QueryKey;
+			readonly queryFn:
+				| Effect.Effect<A, E, never>
+				| ((context: QueryFunctionContext) => Effect.Effect<A, E, never>);
+			readonly runtime?: undefined;
+	  })
+	| (CreateQueryAtomSharedOptions<A, E, R> & {
+			readonly queryKey: QueryKey;
+			readonly queryFn:
+				| Effect.Effect<A, E, R>
+				| ((context: QueryFunctionContext) => Effect.Effect<A, E, R>);
+			readonly runtime: QueryRuntime<R>;
+	  });
 
 export type CreateQueryAtomInputWithRuntime<A, E, R> = Extract<
 	CreateQueryAtomInput<A, E, R>,
@@ -204,7 +276,9 @@ export type CreateQueryAtomInputWithRuntime<A, E, R> = Extract<
 
 export type ResolvedQueryPolicy<E, R> = {
 	readonly staleTimeMs: number;
-	readonly idleTimeToLiveMs: number;
+	readonly gcTimeMs: number;
+	readonly networkMode: QueryNetworkMode;
+	readonly refetchIntervalMs: number | undefined;
 	readonly retry: Schedule.Schedule<unknown, E, never, R> | undefined;
 	readonly refetchOnMount: boolean;
 	readonly refetchOnWindowFocus: boolean;
@@ -213,10 +287,20 @@ export type ResolvedQueryPolicy<E, R> = {
 
 export type InternalQuery<Arg, A, E, R> = {
 	readonly key: (arg: Arg) => QueryKey;
-	readonly query: (arg: Arg) => Effect.Effect<A, E, R>;
+	readonly query: (
+		arg: Arg,
+		context: QueryFunctionContext,
+	) => Effect.Effect<A, E, R>;
 	readonly reactivityKeys: (arg: Arg) => ReactivityKeySet | undefined;
+	readonly enabled: (arg: Arg) => boolean;
+	readonly initialData: (arg: Arg) => A | undefined;
+	readonly initialDataUpdatedAt: (arg: Arg) => number | undefined;
+	readonly placeholderData: (
+		arg: Arg,
+		previousValue: A | undefined,
+	) => A | undefined;
 	readonly policy: ResolvedQueryPolicy<E, R>;
-	readonly schema: QueryCodec<A, E>;
+	readonly schema: QueryCodec<A, E> | undefined;
 	readonly label: (arg: Arg) => string;
 	readonly entries: Map<QueryHash, QueryEntry<Arg, A, E, R>>;
 };
@@ -226,12 +310,15 @@ export type QueryEntryBase = {
 	readonly policy: Pick<
 		ResolvedQueryPolicy<never, never>,
 		| "staleTimeMs"
-		| "idleTimeToLiveMs"
+		| "gcTimeMs"
+		| "networkMode"
+		| "refetchIntervalMs"
 		| "refetchOnMount"
 		| "refetchOnWindowFocus"
 		| "refetchOnReconnect"
 	>;
 	readonly reactivityHashes: ReadonlySet<string>;
+	readonly isEnabled: () => boolean;
 	readonly snapshot: () => QueryResult<unknown, unknown>;
 	readonly triggerFetch: Effect.Effect<void>;
 	readonly remove: () => void;
@@ -239,13 +326,16 @@ export type QueryEntryBase = {
 	invalidated: boolean;
 	lastInactiveAt: number | undefined;
 	inFlight: Fiber.Fiber<unknown, unknown> | undefined;
+	poller: Fiber.Fiber<void, never> | undefined;
+	abortController: AbortController | undefined;
+	paused: boolean;
 };
 
 export type QueryEntry<Arg, A, E, R> = QueryEntryBase & {
 	readonly definition: InternalQuery<Arg, A, E, R>;
 	readonly arg: Arg;
 	readonly key: QueryKey;
-	readonly runQuery: Effect.Effect<A, E>;
+	readonly runQuery: (abortController: AbortController) => Effect.Effect<A, E>;
 	readonly resultRef: SubscriptionRef.SubscriptionRef<QueryResult<A, E>>;
 	readonly lock: Semaphore.Semaphore;
 	readonly current: () => QueryResult<A, E>;
@@ -276,14 +366,16 @@ export type QueryRuntimeWithLayer<R = never, E = never> = QueryRuntime<R, E> & {
 export const defaultPolicy = Object.freeze({
 	staleTime: "0 millis",
 	gcTime: "5 minutes",
-	idleTimeToLive: "5 minutes",
+	networkMode: "online",
+	refetchInterval: false,
 	refetchOnMount: true,
 	refetchOnReconnect: true,
 	refetchOnWindowFocus: true,
 }) satisfies {
 	readonly staleTime: Duration.Input;
 	readonly gcTime: Duration.Input;
-	readonly idleTimeToLive: Duration.Input;
+	readonly networkMode: QueryNetworkMode;
+	readonly refetchInterval: Duration.Input | false;
 	readonly refetchOnMount: boolean;
 	readonly refetchOnReconnect: boolean;
 	readonly refetchOnWindowFocus: boolean;

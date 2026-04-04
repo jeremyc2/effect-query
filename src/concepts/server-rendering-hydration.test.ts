@@ -1,0 +1,31 @@
+import { expect, test } from "bun:test";
+import * as Effect from "effect/Effect";
+import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
+import { createQueryAtomFactory, dehydrate, hydrate } from "../EffectQuery.ts";
+import { assertSuccess } from "../testing-utils.ts";
+
+test("server rendering and hydration preserve successful query snapshots", async () => {
+	const userQuery = createQueryAtomFactory({
+		queryKey: (id: string) => ["user", id],
+		staleTime: "1 hour",
+		queryFn: (id: string) => Effect.succeed(`${id}:hydrated`),
+	});
+
+	const sourceRegistry = AtomRegistry.make();
+	const atom = userQuery("1");
+	const release = sourceRegistry.mount(atom);
+	await Effect.runPromise(
+		AtomRegistry.getResult(sourceRegistry, atom, {
+			suspendOnWaiting: true,
+		}),
+	);
+
+	const dehydrated = dehydrate(sourceRegistry);
+	const targetRegistry = AtomRegistry.make();
+	hydrate(targetRegistry, dehydrated);
+
+	const hydrated = targetRegistry.get(atom);
+	assertSuccess(hydrated);
+	expect(hydrated.value).toBe("1:hydrated");
+	release();
+});

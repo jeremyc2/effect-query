@@ -309,24 +309,17 @@ const userAtom = userAtomFactory("42");</code></pre>
 							<h3>effect-query</h3>
 							<p>The component reads an atom that already knows how to fetch.</p>
 						</header>
-						<pre><code>import {
-  getFailureCause,
-  getSuccess,
-  isFailure,
-  isWaiting,
-} from "effect-query";
-import * as Option from "effect/Option";
+						<pre><code>import * as Cause from "effect/Cause";
 
 function UserScreen({ userId }: Props) {
   const user = useAtomValue(userAtomFactory(userId));
-  const success = getSuccess(user);
 
-  if (isWaiting(user)) return &lt;Spinner /&gt;;
-  if (isFailure(user)) {
-    return &lt;ErrorView error={getFailureCause(user)} /&gt;;
+  if (user.isPending) return &lt;Spinner /&gt;;
+  if (user.isError) {
+    return &lt;ErrorView error={Cause.pretty(user.failureCause)} /&gt;;
   }
-  if (Option.isSome(success)) {
-    return &lt;UserCard user={success.value} /&gt;;
+  if (user.data !== undefined) {
+    return &lt;UserCard user={user.data} /&gt;;
   }
 
   return null;
@@ -337,7 +330,46 @@ function UserScreen({ userId }: Props) {
 					<strong>Another important shift:</strong> in TanStack Query, the
 					<code>queryFn</code> returns a Promise. In <code>effect-query</code>,
 					the query returns an Effect. Same job. Different execution model.
+					Query functions also receive a context object with
+					<code>queryKey</code> and <code>signal</code>. The result object you
+					read from the atom also carries status flags directly, so you do not
+					need extra helper imports just to inspect state.
 				</aside>
+			</section>
+
+			<section>
+				<h2>Query function context is built in</h2>
+				<p>
+					If you are coming from TanStack Query, this should feel familiar.
+					The query function receives the argument you passed to the factory and
+					a context object containing the resolved <code>queryKey</code> and an
+					<code>AbortSignal</code>.
+				</p>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>TanStack Query</h3>
+							<p>Query function context.</p>
+						</header>
+						<pre><code>useQuery({
+  queryKey: ["user", userId],
+  queryFn: ({ queryKey, signal }) =>
+    fetch(`/api/users/${queryKey[1]}`, { signal }).then((r) => r.json()),
+});</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>The factory argument and context are both available.</p>
+						</header>
+						<pre><code>const userAtomFactory = createQueryAtomFactory({
+  runtime: queryRuntime,
+  queryKey: (userId: string) => ["user", userId],
+  queryFn: (userId, { signal }) =>
+    HttpClient.get(`/api/users/${userId}`, { signal }),
+});</code></pre>
+					</article>
+				</div>
 			</section>
 
 			<section>
@@ -389,7 +421,7 @@ const userAtomFactory = createQueryAtomFactory({
   queryFn: fetchUser,
 });
 
-const updateUserMutation = mutation({
+const updateUserMutation = createMutationAtom({
   runtime: queryRuntime,
   mutationFn: updateUser,
   invalidate: (input) => ({
@@ -448,11 +480,12 @@ const cachedTask = queryClient.getQueryData(["task", taskId]);</code></pre>
 					<article class="snippet">
 						<header>
 							<h3>effect-query</h3>
-							<p>Factory methods.</p>
+							<p>Factory and atom methods.</p>
 						</header>
 						<pre><code>await Effect.runPromise(taskAtomFactory.ensure(taskId));
 
-const cachedTask = await Effect.runPromise(taskAtomFactory.peek(taskId));</code></pre>
+const cachedTask = await Effect.runPromise(taskAtomFactory.peek(taskId));
+await Effect.runPromise(taskAtomFactory.cancel(taskId));</code></pre>
 					</article>
 				</div>
 				<div class="comparison">
@@ -481,6 +514,24 @@ const snapshot = dehydrate(sourceRegistry);
 hydrate(targetRegistry, snapshot);</code></pre>
 					</article>
 				</div>
+			</section>
+
+			<section>
+				<h2>Polling and network mode are separate concerns</h2>
+				<p>
+					Just like in TanStack Query, freshness and polling are not the same
+					setting. Use <code>staleTime</code> to define freshness,
+					<code>refetchInterval</code> to poll, and <code>networkMode</code> to
+					control how queries behave while offline.
+				</p>
+				<pre><code>const activityAtom = createQueryAtom({
+  runtime: queryRuntime,
+  queryKey: ["activity"],
+  staleTime: "30 seconds",
+  refetchInterval: "5 seconds",
+  networkMode: "online",
+  queryFn: fetchActivity,
+});</code></pre>
 			</section>
 
 			<section>

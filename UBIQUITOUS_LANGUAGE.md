@@ -20,8 +20,10 @@ Source code, documentation, examples, and conversation should all use the terms 
 | --- | --- | --- | --- | --- |
 | **query atom factory** | `query family`, `query hook factory`, `observer factory` | Coined | 8 | 9 |
 | **query atom** | `useQuery result`, `observer result`, `query family member` | Coined | 7 | 8 |
+| **mutation atom factory** | `mutation family`, `action factory`, `command factory` | Coined | 3 | 5 |
+| **mutation atom** | `useMutation result`, `mutation hook`, `action hook` | Coined | 4 | 6 |
 | **query runtime** | `query client`, `cache client` | Coined | 7 | 8 |
 | **gc time** | `idle TTL`, `idleTimeToLive` | TanStack Query | 5 | 6 |
 | **reactivity keys** | `query filters`, `cache selectors` | Coined | 9 | 9 |
-| **mutation** | `action hook`, `command hook` | TanStack Query | 7 | 8 |
+| **mutation** | `write operation`, `remote write` | TanStack Query | 7 | 8 |
 | **hydrate** / **dehydrate** | `rehydrate cache`, `cache snapshot API` | TanStack Query | 6 | 7 |

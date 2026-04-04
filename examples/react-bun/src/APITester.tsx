@@ -1,19 +1,22 @@
 import { useAtomValue } from "@effect/atom-react";
 import { Effect, Random } from "effect";
-import { createQueryAtom, getSuccess, makeRuntime } from "../../../src/index";
+import { createQueryAtom, makeRuntime } from "../../../src/index";
 
 const queryRuntime = makeRuntime();
 
 const helloWorldAtom = createQueryAtom({
 	runtime: queryRuntime,
 	queryKey: ["hello-world"],
-	queryFn: Random.nextUUIDv4.pipe(Effect.delay("4 seconds")),
+	queryFn: Random.nextUUIDv4,
 	staleTime: "2 seconds",
 });
 
 export function APITester() {
 	const helloWorldResult = useAtomValue(helloWorldAtom);
-	const helloWorld = getSuccess(helloWorldResult);
+	const responseText = helloWorldResult.isError
+		? (helloWorldResult.error ?? "Request failed.")
+		: helloWorldResult.data;
+
 	return (
 		<div className="mt-8 mx-auto w-full max-w-2xl text-left flex flex-col gap-4">
 			<form className="flex items-center gap-2 bg-[#1a1a1a] p-3 rounded-xl font-mono border-2 border-[#fbf0df] transition-colors duration-300 focus-within:border-[#f3d5a3] w-full">
@@ -37,17 +40,19 @@ export function APITester() {
 				/>
 				<button
 					type="button"
-					onClick={() => {}}
+					onClick={() => {
+						Effect.runPromise(helloWorldAtom.refresh());
+					}}
 					className="bg-[#fbf0df] text-[#1a1a1a] border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-[#f3d5a3] hover:-translate-y-px cursor-pointer whitespace-nowrap"
 				>
-					Send
+					{helloWorldResult.isFetching ? "Loading..." : "Send"}
 				</button>
 			</form>
 			<textarea
 				readOnly
 				placeholder="Response will appear here..."
 				className="w-full min-h-[140px] bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df] font-mono resize-y focus:border-[#f3d5a3] placeholder-[#fbf0df]/40"
-				value={helloWorld.valueOrUndefined}
+				value={responseText}
 			/>
 		</div>
 	);

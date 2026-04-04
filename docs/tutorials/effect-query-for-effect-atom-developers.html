@@ -227,6 +227,22 @@ const dashboardAtom = createQueryAtom({
 			</section>
 
 			<section>
+				<h2>Query functions get request context</h2>
+				<p>
+					Query atoms are still atom-shaped from the outside, but the underlying
+					query function gets a little more structure than a plain async atom.
+					It receives the resolved <code>queryKey</code> and an
+					<code>AbortSignal</code> so request layers can handle cancellation.
+				</p>
+				<pre><code>const taskAtomFactory = createQueryAtomFactory({
+  runtime: queryRuntime,
+  queryKey: (taskId: string) => ["task", taskId],
+  queryFn: (taskId, { signal }) =>
+    DemoApi.use((api) => api.getTask(taskId, { signal })),
+});</code></pre>
+			</section>
+
+			<section>
 				<h2>Parameterization becomes a factory</h2>
 				<p>
 					Plain atoms are still great for local selection. The new move is that
@@ -282,24 +298,17 @@ const selectedUserAtom = Atom.make((get) =>
 							<h3>effect-query</h3>
 							<p>Reading a query atom feels almost the same.</p>
 						</header>
-						<pre><code>import {
-  getFailureCause,
-  getSuccess,
-  isFailure,
-  isWaiting,
-} from "effect-query";
-import * as Option from "effect/Option";
+						<pre><code>import * as Cause from "effect/Cause";
 
 function DashboardScreen() {
   const dashboard = useAtomValue(dashboardAtom);
-  const success = getSuccess(dashboard);
 
-  if (isWaiting(dashboard)) return &lt;Spinner /&gt;;
-  if (isFailure(dashboard)) {
-    return &lt;ErrorView error={getFailureCause(dashboard)} /&gt;;
+  if (dashboard.isPending) return &lt;Spinner /&gt;;
+  if (dashboard.isError) {
+    return &lt;ErrorView error={Cause.pretty(dashboard.failureCause)} /&gt;;
   }
-  if (Option.isSome(success)) {
-    return &lt;DashboardView dashboard={success.value} /&gt;;
+  if (dashboard.data !== undefined) {
+    return &lt;DashboardView dashboard={dashboard.data} /&gt;;
   }
 
   return null;
@@ -332,9 +341,9 @@ const saveDraftAtom = Atom.make((get, set, body: string) => {
 							<h3>effect-query</h3>
 							<p>Remote write.</p>
 						</header>
-						<pre><code>import { mutation } from "effect-query";
+						<pre><code>import { createMutationAtom } from "effect-query";
 
-const addCommentMutation = mutation({
+const addCommentMutation = createMutationAtom({
   runtime: queryRuntime,
   mutationFn: (input: { taskId: string; body: string }) =>
     DemoApi.use((api) => api.addComment(input)),
@@ -373,6 +382,22 @@ const draft = registry.get(draftAtom);</code></pre>
 const cachedTask = await Effect.runPromise(taskAtomFactory.peek("task-1"));</code></pre>
 					</article>
 				</div>
+				<div class="comparison">
+					<article class="snippet">
+						<header>
+							<h3>Effect Atom</h3>
+							<p>You usually own cancellation yourself.</p>
+						</header>
+						<pre><code>// Plain async atoms do not come with a query cancellation helper.</code></pre>
+					</article>
+					<article class="snippet">
+						<header>
+							<h3>effect-query</h3>
+							<p>Query work can be cancelled through the factory or atom.</p>
+						</header>
+						<pre><code>await Effect.runPromise(taskAtomFactory.cancel("task-1"));</code></pre>
+					</article>
+				</div>
 				<aside class="note">
 					<strong>The nice payoff:</strong> local state and remote state still
 					feel related, but they stop pretending to be the same problem.
@@ -408,6 +433,9 @@ const cachedTask = await Effect.runPromise(taskAtomFactory.peek("task-1"));</cod
   runtime: queryRuntime,
   queryKey: (userId: string) => ["user", userId],
   staleTime: "1 hour",
+  gcTime: "5 minutes",
+  refetchInterval: false,
+  networkMode: "online",
   reactivityKeys: (userId: string) => ({
     user: [userId],
   }),
