@@ -180,7 +180,7 @@ export class DemoApi extends ServiceMap.Service<
 			input: AddCommentInput,
 		) => Effect.Effect<Task, TaskMissingError>;
 	}
->()("examples/vite-plus-effect-query/DemoApi") {}
+>()("examples/vite-plus/DemoApi") {}
 
 export const DemoApiLive = Layer.effect(
 	DemoApi,
