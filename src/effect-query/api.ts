@@ -15,6 +15,7 @@ import {
 	isSuccess,
 	isWaiting,
 	makeDefinition,
+	resolveMutationFn,
 } from "./core.ts";
 import { defaultRuntime, provideRuntime } from "./runtime.ts";
 import { QueryStore } from "./store.ts";
@@ -27,10 +28,21 @@ import type {
 	QueryAtomFactory,
 	QueryAtomFactoryInput,
 	QueryAtomFactoryOptions,
-	QueryKey,
 	QueryRuntime,
 	ReactivityKeySet,
 } from "./types.ts";
+
+const hasStaticQueryKey = <A, E, R>(
+	options: CreateQueryAtomInput<A, E, R>,
+): options is CreateQueryAtomInput<A, E, R> & {
+	readonly queryKey: ReadonlyArray<unknown>;
+} => "queryKey" in options && options.queryKey !== undefined;
+
+const hasStaticQueryFn = <A, E, R>(
+	options: CreateQueryAtomInput<A, E, R>,
+): options is CreateQueryAtomInput<A, E, R> & {
+	readonly queryFn: Effect.Effect<A, E, R>;
+} => "queryFn" in options && options.queryFn !== undefined;
 
 const createQueryAtomFactoryWithRuntime = <Arg, A, E = never, R = never>(
 	runtime: QueryRuntime<R>,
@@ -137,33 +149,60 @@ export function createQueryAtom<A, E = never>(
 	options: CreateQueryAtomInput<A, E, never>,
 ): QueryAtom<A, E>;
 export function createQueryAtom<A, E = never, R = never>(
-	options: Omit<QueryAtomFactoryOptions<void, A, E, R>, "key" | "query"> & {
+	options: CreateQueryAtomInput<A, E, R> & {
 		readonly runtime: QueryRuntime<R>;
-		readonly key: QueryKey;
-		readonly query: Effect.Effect<A, E, R>;
 	},
 ): QueryAtom<A, E>;
 export function createQueryAtom<A, E = never, R = never>(
 	options: CreateQueryAtomInput<A, E, R>,
 ): QueryAtom<A, E> {
+	const queryKey = hasStaticQueryKey(options) ? options.queryKey : options.key;
 	const queries = hasCreateQueryAtomRuntime(options)
-		? createQueryAtomFactory({
-				runtime: options.runtime,
-				key: () => options.key,
-				query: () => options.query,
-				reactivityKeys: options.reactivityKeys,
-				policy: options.policy,
-				label: options.label,
-				schema: options.schema,
-			})
-		: createQueryAtomFactory<void, A, E>({
-				key: () => options.key,
-				query: () => options.query,
-				reactivityKeys: options.reactivityKeys,
-				policy: options.policy,
-				label: options.label,
-				schema: options.schema,
-			});
+		? (() => {
+				const query = hasStaticQueryFn(options)
+					? options.queryFn
+					: options.query;
+				return createQueryAtomFactory({
+					runtime: options.runtime,
+					key: () => queryKey,
+					query: () => query,
+					queryKey: () => queryKey,
+					queryFn: () => query,
+					reactivityKeys: options.reactivityKeys,
+					staleTime: options.staleTime,
+					gcTime: options.gcTime,
+					idleTimeToLive: options.idleTimeToLive,
+					retry: options.retry,
+					refetchOnMount: options.refetchOnMount,
+					refetchOnWindowFocus: options.refetchOnWindowFocus,
+					refetchOnReconnect: options.refetchOnReconnect,
+					policy: options.policy,
+					label: options.label,
+					schema: options.schema,
+				});
+			})()
+		: (() => {
+				const query = hasStaticQueryFn(options)
+					? options.queryFn
+					: options.query;
+				return createQueryAtomFactory<void, A, E>({
+					key: () => queryKey,
+					query: () => query,
+					queryKey: () => queryKey,
+					queryFn: () => query,
+					reactivityKeys: options.reactivityKeys,
+					staleTime: options.staleTime,
+					gcTime: options.gcTime,
+					idleTimeToLive: options.idleTimeToLive,
+					retry: options.retry,
+					refetchOnMount: options.refetchOnMount,
+					refetchOnWindowFocus: options.refetchOnWindowFocus,
+					refetchOnReconnect: options.refetchOnReconnect,
+					policy: options.policy,
+					label: options.label,
+					schema: options.schema,
+				});
+			})();
 	const atom = queries(undefined);
 	return Object.assign(atom, {
 		key: () => queries.key(undefined),
@@ -182,7 +221,7 @@ const mutationWithRuntime = <Arg, A, E = never, R = never>(
 ): Atom.AtomResultFn<Arg, A, E> =>
 	runtime.fn(
 		Effect.fn(function* (arg: Arg) {
-			const result = yield* options.run(arg);
+			const result = yield* resolveMutationFn(options)(arg);
 			if (options.onSuccess !== undefined) {
 				yield* options.onSuccess(result, arg);
 			}
@@ -217,6 +256,14 @@ export function mutation<Arg, A, E = never, R = never>(
 	}
 	return mutationWithRuntime<Arg, A, E, R>(options.runtime, options);
 }
+
+export const queryOptions = <Arg, A, E = never, R = never>(
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
+): QueryAtomFactoryOptions<Arg, A, E, R> => options;
+
+export const mutationOptions = <Arg, A, E = never, R = never>(
+	options: MutationOptions<Arg, A, E, R>,
+): MutationOptions<Arg, A, E, R> => options;
 
 export const prefetch = Effect.fn(function* <Arg, A, E>(
 	queries: QueryAtomFactory<Arg, A, E>,

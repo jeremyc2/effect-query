@@ -337,34 +337,34 @@ export const createDemoModel = () => {
 
 	const dashboardAtom = createQueryAtom({
 		runtime: queryRuntime,
-		key: ["dashboard"],
+		queryKey: ["dashboard"],
 		reactivityKeys: () => ({
 			tasks: ["all"],
 		}),
-		query: DemoApi.use((api) => api.getDashboard),
+		queryFn: DemoApi.use((api) => api.getDashboard),
 	});
 
 	const taskListAtomFactory = createQueryAtomFactory({
 		runtime: queryRuntime,
-		key: (filter: TaskFilter) => ["tasks", filter],
+		queryKey: (filter: TaskFilter) => ["tasks", filter],
 		reactivityKeys: () => ({
 			tasks: ["all"],
 		}),
-		query: (filter: TaskFilter) => DemoApi.use((api) => api.getTasks(filter)),
+		queryFn: (filter: TaskFilter) => DemoApi.use((api) => api.getTasks(filter)),
 	});
 
 	const taskDetailAtomFactory = createQueryAtomFactory({
 		runtime: queryRuntime,
-		key: (taskId: string) => ["task", taskId],
+		queryKey: (taskId: string) => ["task", taskId],
 		reactivityKeys: (taskId: string) => ({
 			task: [taskId],
 		}),
-		query: (taskId: string) => DemoApi.use((api) => api.getTask(taskId)),
+		queryFn: (taskId: string) => DemoApi.use((api) => api.getTask(taskId)),
 	});
 
 	const createTaskMutation = mutation({
 		runtime: queryRuntime,
-		run: (input: CreateTaskInput) =>
+		mutationFn: (input: CreateTaskInput) =>
 			DemoApi.use((api) => api.createTask(input)),
 		invalidate: (_input: CreateTaskInput, task: Task) => ({
 			tasks: ["all"],
@@ -374,7 +374,8 @@ export const createDemoModel = () => {
 
 	const advanceTaskMutation = mutation({
 		runtime: queryRuntime,
-		run: (taskId: string) => DemoApi.use((api) => api.advanceTask(taskId)),
+		mutationFn: (taskId: string) =>
+			DemoApi.use((api) => api.advanceTask(taskId)),
 		invalidate: (taskId: string) => ({
 			tasks: ["all"],
 			task: [taskId],
@@ -383,7 +384,7 @@ export const createDemoModel = () => {
 
 	const addCommentMutation = mutation({
 		runtime: queryRuntime,
-		run: (input: AddCommentInput) =>
+		mutationFn: (input: AddCommentInput) =>
 			DemoApi.use((api) => api.addComment(input)),
 		invalidate: (input: AddCommentInput) => ({
 			tasks: ["all"],

@@ -25,11 +25,9 @@ describe("effect-query", () => {
 
 		const userQuery = createQueryAtomFactory({
 			runtime,
-			key: (id: string) => ["user", id],
-			policy: {
-				staleTime: "1 minute",
-			},
-			query: loadUser,
+			queryKey: (id: string) => ["user", id],
+			staleTime: "1 minute",
+			queryFn: loadUser,
 		});
 
 		const [first, second] = await Effect.runPromise(
@@ -51,8 +49,8 @@ describe("effect-query", () => {
 
 		const userQuery = createQueryAtomFactory({
 			runtime,
-			key: (id: string) => ["user", id],
-			query: loadUser,
+			queryKey: (id: string) => ["user", id],
+			queryFn: loadUser,
 		});
 
 		const registry = AtomRegistry.make();
@@ -86,31 +84,27 @@ describe("effect-query", () => {
 
 		const userQuery = createQueryAtomFactory({
 			runtime,
-			key: (id: string) => ["user", id],
-			policy: {
-				staleTime: "1 hour",
-			},
+			queryKey: (id: string) => ["user", id],
+			staleTime: "1 hour",
 			reactivityKeys: (id: string) => ({
 				user: [id],
 			}),
-			query: (id: string) => Effect.succeed(`${id}:${userVersion}`),
+			queryFn: (id: string) => Effect.succeed(`${id}:${userVersion}`),
 		});
 
 		const projectQuery = createQueryAtomFactory({
 			runtime,
-			key: (id: string) => ["project", id],
-			policy: {
-				staleTime: "1 hour",
-			},
+			queryKey: (id: string) => ["project", id],
+			staleTime: "1 hour",
 			reactivityKeys: (id: string) => ({
 				project: [id],
 			}),
-			query: (id: string) => Effect.succeed(`${id}:${projectVersion}`),
+			queryFn: (id: string) => Effect.succeed(`${id}:${projectVersion}`),
 		});
 
 		const invalidateUser = mutation({
 			runtime,
-			run: (id: string) => Effect.succeed(id),
+			mutationFn: (id: string) => Effect.succeed(id),
 			invalidate: (id: string) => ({
 				user: [id],
 			}),
@@ -160,11 +154,9 @@ describe("effect-query", () => {
 
 		const userQuery = createQueryAtomFactory({
 			runtime,
-			key: (id: string) => ["user", id],
-			policy: {
-				staleTime: "1 hour",
-			},
-			query: (id: string) =>
+			queryKey: (id: string) => ["user", id],
+			staleTime: "1 hour",
+			queryFn: (id: string) =>
 				Effect.sync(() => {
 					calls += 1;
 					return `${id}:fetched`;
@@ -227,19 +219,17 @@ describe("effect-query", () => {
 
 		const taskQuery = createQueryAtomFactory({
 			runtime,
-			key: (taskId: string) => ["task", taskId],
-			policy: {
-				staleTime: "1 hour",
-			},
+			queryKey: (taskId: string) => ["task", taskId],
+			staleTime: "1 hour",
 			reactivityKeys: (taskId: string) => ({
 				task: [taskId],
 			}),
-			query: loadTask,
+			queryFn: loadTask,
 		});
 
 		const addComment = mutation({
 			runtime,
-			run: persistComment,
+			mutationFn: persistComment,
 			invalidate: (input) => ({
 				task: [input.taskId],
 			}),
@@ -313,11 +303,9 @@ describe("effect-query", () => {
 
 		const userQuery = createQueryAtomFactory({
 			runtime,
-			key: (id: string) => ["user", id],
-			policy: {
-				staleTime: "1 hour",
-			},
-			query: (id: string) => Effect.succeed(`${id}:hydrated`),
+			queryKey: (id: string) => ["user", id],
+			staleTime: "1 hour",
+			queryFn: (id: string) => Effect.succeed(`${id}:hydrated`),
 		});
 
 		const sourceRegistry = AtomRegistry.make();
@@ -350,12 +338,10 @@ describe("effect-query", () => {
 
 		const userQuery = createQueryAtomFactory({
 			runtime,
-			key: (id: string) => ["user", id],
-			policy: {
-				staleTime: "0 millis",
-				refetchOnWindowFocus: true,
-			},
-			query: loadUser,
+			queryKey: (id: string) => ["user", id],
+			staleTime: "0 millis",
+			refetchOnWindowFocus: true,
+			queryFn: loadUser,
 		});
 
 		const registry = AtomRegistry.make();

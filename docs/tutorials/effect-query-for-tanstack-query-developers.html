@@ -233,11 +233,9 @@ const queryRuntime = makeRuntime();
 
 const dashboardAtom = createQueryAtom({
   runtime: queryRuntime,
-  key: ["dashboard"],
-  policy: {
-    staleTime: "1 minute",
-  },
-  query: fetchDashboard,
+  queryKey: ["dashboard"],
+  staleTime: "1 minute",
+  queryFn: fetchDashboard,
 });</code></pre>
 					</article>
 				</div>
@@ -280,11 +278,9 @@ const dashboardAtom = createQueryAtom({
 
 const userAtomFactory = createQueryAtomFactory({
   runtime: queryRuntime,
-  key: (userId: string) => ["user", userId],
-  policy: {
-    staleTime: "1 minute",
-  },
-  query: (userId: string) => fetchUser(userId),
+  queryKey: (userId: string) => ["user", userId],
+  staleTime: "1 minute",
+  queryFn: (userId: string) => fetchUser(userId),
 });
 
 const userAtom = userAtomFactory("42");</code></pre>
@@ -377,25 +373,25 @@ function UserScreen({ userId }: Props) {
 						</header>
 						<pre><code>const usersAtom = createQueryAtom({
   runtime: queryRuntime,
-  key: ["users"],
+  queryKey: ["users"],
   reactivityKeys: () => ({
     users: ["all"],
   }),
-  query: fetchUsers,
+  queryFn: fetchUsers,
 });
 
 const userAtomFactory = createQueryAtomFactory({
   runtime: queryRuntime,
-  key: (userId: string) => ["user", userId],
+  queryKey: (userId: string) => ["user", userId],
   reactivityKeys: (userId: string) => ({
     user: [userId],
   }),
-  query: fetchUser,
+  queryFn: fetchUser,
 });
 
 const updateUserMutation = mutation({
   runtime: queryRuntime,
-  run: updateUser,
+  mutationFn: updateUser,
   invalidate: (input) => ({
     users: ["all"],
     user: [input.userId],

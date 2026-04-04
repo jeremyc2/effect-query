@@ -3,14 +3,15 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Hash from "effect/Hash";
 import * as Option from "effect/Option";
+import type * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type {
 	CreateQueryAtomInput,
-	CreateQueryAtomInputWithRuntime,
 	DataUpdater,
 	InternalQuery,
 	MutationInput,
+	MutationOptions,
 	QueryAtomFactoryInput,
 	QueryAtomFactoryOptions,
 	QueryCodec,
@@ -37,28 +38,48 @@ class QueryResultMissingError extends Schema.TaggedErrorClass<QueryResultMissing
 export const makeDefinition = <Arg, A, E, R>(
 	options: QueryAtomFactoryOptions<Arg, A, E, R>,
 ): InternalQuery<Arg, A, E, R> => ({
-	key: options.key,
-	query: options.query,
+	key: resolveQueryKey(options),
+	query: resolveQueryFn(options),
 	reactivityKeys: options.reactivityKeys ?? (() => undefined),
-	policy: resolvePolicy(options.policy),
+	policy: resolvePolicy(options),
 	schema: options.schema ?? defaultQueryCodec(),
 	label: resolveLabel(options),
 	entries: new Map(),
 });
 
-export const resolvePolicy = <E, R>(
-	policy?: QueryPolicy<E, R>,
-): ResolvedQueryPolicy<E, R> => ({
-	staleTimeMs: toMillis(policy?.staleTime ?? defaultPolicy.staleTime),
-	idleTimeToLiveMs: toMillis(
-		policy?.idleTimeToLive ?? defaultPolicy.idleTimeToLive,
+export const resolvePolicy = <E, R>(options: {
+	readonly policy?: QueryPolicy<E, R> | undefined;
+	readonly staleTime?: Duration.Input | undefined;
+	readonly gcTime?: Duration.Input | undefined;
+	readonly idleTimeToLive?: Duration.Input | undefined;
+	readonly retry?: Schedule.Schedule<unknown, E, never, R> | undefined;
+	readonly refetchOnMount?: boolean | undefined;
+	readonly refetchOnWindowFocus?: boolean | undefined;
+	readonly refetchOnReconnect?: boolean | undefined;
+}): ResolvedQueryPolicy<E, R> => ({
+	staleTimeMs: toMillis(
+		options.staleTime ?? options.policy?.staleTime ?? defaultPolicy.staleTime,
 	),
-	retry: policy?.retry,
-	refetchOnMount: policy?.refetchOnMount ?? defaultPolicy.refetchOnMount,
+	idleTimeToLiveMs: toMillis(
+		options.gcTime ??
+			options.idleTimeToLive ??
+			options.policy?.gcTime ??
+			options.policy?.idleTimeToLive ??
+			defaultPolicy.gcTime,
+	),
+	retry: options.retry ?? options.policy?.retry,
+	refetchOnMount:
+		options.refetchOnMount ??
+		options.policy?.refetchOnMount ??
+		defaultPolicy.refetchOnMount,
 	refetchOnWindowFocus:
-		policy?.refetchOnWindowFocus ?? defaultPolicy.refetchOnWindowFocus,
+		options.refetchOnWindowFocus ??
+		options.policy?.refetchOnWindowFocus ??
+		defaultPolicy.refetchOnWindowFocus,
 	refetchOnReconnect:
-		policy?.refetchOnReconnect ?? defaultPolicy.refetchOnReconnect,
+		options.refetchOnReconnect ??
+		options.policy?.refetchOnReconnect ??
+		defaultPolicy.refetchOnReconnect,
 });
 
 export const flattenObservedResult = <A, E>(
@@ -77,12 +98,45 @@ export const resolveLabel = <Arg, A, E, R>(
 	options: QueryAtomFactoryOptions<Arg, A, E, R>,
 ): ((arg: Arg) => string) => {
 	const label = options.label;
+	const key = resolveQueryKey(options);
 	if (typeof label === "function") {
 		return label;
 	}
-	return (arg: Arg) =>
-		label ?? `effect-query:${hashQueryKey(options.key(arg))}`;
+	return (arg: Arg) => label ?? `effect-query:${hashQueryKey(key(arg))}`;
 };
+
+export const resolveQueryKey = <Arg, A, E, R>(
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
+): ((arg: Arg) => QueryKey) =>
+	hasQueryKeyResolver(options) ? options.queryKey : options.key;
+
+export const resolveQueryFn = <Arg, A, E, R>(
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
+): ((arg: Arg) => Effect.Effect<A, E, R>) =>
+	hasQueryFnResolver(options) ? options.queryFn : options.query;
+
+export const resolveMutationFn = <Arg, A, E, R>(
+	options: MutationOptions<Arg, A, E, R>,
+): ((arg: Arg) => Effect.Effect<A, E, R>) =>
+	hasMutationFnResolver(options) ? options.mutationFn : options.run;
+
+const hasQueryKeyResolver = <Arg, A, E, R>(
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
+): options is QueryAtomFactoryOptions<Arg, A, E, R> & {
+	readonly queryKey: (arg: Arg) => QueryKey;
+} => "queryKey" in options && options.queryKey !== undefined;
+
+const hasQueryFnResolver = <Arg, A, E, R>(
+	options: QueryAtomFactoryOptions<Arg, A, E, R>,
+): options is QueryAtomFactoryOptions<Arg, A, E, R> & {
+	readonly queryFn: (arg: Arg) => Effect.Effect<A, E, R>;
+} => "queryFn" in options && options.queryFn !== undefined;
+
+const hasMutationFnResolver = <Arg, A, E, R>(
+	options: MutationOptions<Arg, A, E, R>,
+): options is MutationOptions<Arg, A, E, R> & {
+	readonly mutationFn: (arg: Arg) => Effect.Effect<A, E, R>;
+} => "mutationFn" in options && options.mutationFn !== undefined;
 
 export const hasRuntimeState = <R, E>(
 	runtime: QueryRuntime<R, E>,
@@ -99,13 +153,13 @@ export const hasMutationRuntime = <Arg, A, E, R>(
 	options: MutationInput<Arg, A, E, R>,
 ): options is {
 	readonly runtime: QueryRuntime<R>;
-	readonly run: (arg: Arg) => Effect.Effect<A, E, R>;
 } & MutationInput<Arg, A, E, R> => options.runtime !== undefined;
 
 export const hasCreateQueryAtomRuntime = <A, E, R>(
 	options: CreateQueryAtomInput<A, E, R>,
-): options is CreateQueryAtomInputWithRuntime<A, E, R> =>
-	options.runtime !== undefined;
+): options is CreateQueryAtomInput<A, E, R> & {
+	readonly runtime: QueryRuntime<R>;
+} => options.runtime !== undefined;
 
 export const defaultQueryCodec = <A, E>(): QueryCodec<A, E> =>
 	AsyncResult.Schema({

@@ -215,8 +215,8 @@ const queryRuntime = makeRuntime();
 
 const dashboardAtom = createQueryAtom({
   runtime: queryRuntime,
-  key: ["dashboard"],
-  query: fetchDashboard,
+  queryKey: ["dashboard"],
+  queryFn: fetchDashboard,
 });</code></pre>
 					</article>
 				</div>
@@ -255,8 +255,8 @@ const greetingAtom = Atom.make((get) => {
 
 const userAtomFactory = createQueryAtomFactory({
   runtime: queryRuntime,
-  key: (userId: string) => ["user", userId],
-  query: (userId: string) => fetchUser(userId),
+  queryKey: (userId: string) => ["user", userId],
+  queryFn: (userId: string) => fetchUser(userId),
 });
 
 const selectedUserIdAtom = Atom.make("42");
@@ -336,7 +336,7 @@ const saveDraftAtom = Atom.make((get, set, body: string) => {
 
 const addCommentMutation = mutation({
   runtime: queryRuntime,
-  run: (input: { taskId: string; body: string }) =>
+  mutationFn: (input: { taskId: string; body: string }) =>
     DemoApi.use((api) => api.addComment(input)),
   invalidate: (input) => ({
     task: [input.taskId],
@@ -406,14 +406,12 @@ const cachedTask = await Effect.runPromise(taskAtomFactory.peek("task-1"));</cod
 						</header>
 						<pre><code>const userAtomFactory = createQueryAtomFactory({
   runtime: queryRuntime,
-  key: (userId: string) => ["user", userId],
-  policy: {
-    staleTime: "1 hour",
-  },
+  queryKey: (userId: string) => ["user", userId],
+  staleTime: "1 hour",
   reactivityKeys: (userId: string) => ({
     user: [userId],
   }),
-  query: (userId: string) => fetchUser(userId),
+  queryFn: (userId: string) => fetchUser(userId),
 });</code></pre>
 					</article>
 				</div>
@@ -434,11 +432,11 @@ const cachedTask = await Effect.runPromise(taskAtomFactory.peek("task-1"));</cod
 
 const taskAtomFactory = createQueryAtomFactory({
   runtime: queryRuntime,
-  key: (taskId: string) => ["task", taskId],
+  queryKey: (taskId: string) => ["task", taskId],
   reactivityKeys: (taskId: string) => ({
     task: [taskId],
   }),
-  query: (taskId: string) =>
+  queryFn: (taskId: string) =>
     DemoApi.use((api) => api.getTask(taskId)),
 });</code></pre>
 					</article>

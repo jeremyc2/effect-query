@@ -32,6 +32,7 @@ export type DataUpdater<A> = A | ((current: Option.Option<A>) => A);
 
 export interface QueryPolicy<E = never, R = never> {
 	readonly staleTime?: Duration.Input | undefined;
+	readonly gcTime?: Duration.Input | undefined;
 	readonly idleTimeToLive?: Duration.Input | undefined;
 	readonly retry?: Schedule.Schedule<unknown, E, never, R> | undefined;
 	readonly refetchOnMount?: boolean | undefined;
@@ -39,10 +40,15 @@ export interface QueryPolicy<E = never, R = never> {
 	readonly refetchOnReconnect?: boolean | undefined;
 }
 
-export interface QueryAtomFactoryOptions<Arg, A, E = never, R = never> {
+interface QueryAtomFactorySharedOptions<Arg, A, E = never, R = never> {
 	readonly runtime?: QueryRuntime<R> | undefined;
-	readonly key: (arg: Arg) => QueryKey;
-	readonly query: (arg: Arg) => Effect.Effect<A, E, R>;
+	readonly staleTime?: Duration.Input | undefined;
+	readonly gcTime?: Duration.Input | undefined;
+	readonly idleTimeToLive?: Duration.Input | undefined;
+	readonly retry?: Schedule.Schedule<unknown, E, never, R> | undefined;
+	readonly refetchOnMount?: boolean | undefined;
+	readonly refetchOnWindowFocus?: boolean | undefined;
+	readonly refetchOnReconnect?: boolean | undefined;
 	readonly reactivityKeys?:
 		| ((arg: Arg) => ReactivityKeySet | undefined)
 		| undefined;
@@ -50,6 +56,35 @@ export interface QueryAtomFactoryOptions<Arg, A, E = never, R = never> {
 	readonly label?: string | ((arg: Arg) => string) | undefined;
 	readonly schema?: QueryCodec<A, E> | undefined;
 }
+
+type QueryAtomFactoryKeyOptions<Arg> =
+	| {
+			readonly queryKey: (arg: Arg) => QueryKey;
+			readonly key?: (arg: Arg) => QueryKey;
+	  }
+	| {
+			readonly key: (arg: Arg) => QueryKey;
+			readonly queryKey?: (arg: Arg) => QueryKey;
+	  };
+
+type QueryAtomFactoryFnOptions<Arg, A, E = never, R = never> =
+	| {
+			readonly queryFn: (arg: Arg) => Effect.Effect<A, E, R>;
+			readonly query?: (arg: Arg) => Effect.Effect<A, E, R>;
+	  }
+	| {
+			readonly query: (arg: Arg) => Effect.Effect<A, E, R>;
+			readonly queryFn?: (arg: Arg) => Effect.Effect<A, E, R>;
+	  };
+
+export type QueryAtomFactoryOptions<
+	Arg,
+	A,
+	E = never,
+	R = never,
+> = QueryAtomFactorySharedOptions<Arg, A, E, R> &
+	QueryAtomFactoryKeyOptions<Arg> &
+	QueryAtomFactoryFnOptions<Arg, A, E, R>;
 
 export interface QueryAtomFactory<Arg, A, E = never> {
 	(arg: Arg): Atom.Atom<QueryResult<A, E>>;
@@ -73,10 +108,16 @@ export interface QueryAtom<A, E = never> extends Atom.Atom<QueryResult<A, E>> {
 }
 
 export type CreateQueryAtomOptions<A, E, R> = CreateQueryAtomInput<A, E, R>;
+export type QueryOptions<
+	Arg,
+	A,
+	E = never,
+	R = never,
+> = QueryAtomFactoryOptions<Arg, A, E, R>;
 
-export interface MutationOptions<Arg, A, E = never, R = never> {
+interface MutationSharedOptions<Arg, A, R = never> {
 	readonly runtime?: QueryRuntime<R> | undefined;
-	readonly run: (arg: Arg) => Effect.Effect<A, E, R>;
+	readonly mutationKey?: QueryKey | undefined;
 	readonly invalidate?:
 		| ((arg: Arg, result: A) => ReactivityKeySet | undefined)
 		| undefined;
@@ -90,6 +131,23 @@ export interface MutationOptions<Arg, A, E = never, R = never> {
 	readonly initialValue?: A | undefined;
 }
 
+type MutationFnOptions<Arg, A, E = never, R = never> =
+	| {
+			readonly mutationFn: (arg: Arg) => Effect.Effect<A, E, R>;
+			readonly run?: (arg: Arg) => Effect.Effect<A, E, R>;
+	  }
+	| {
+			readonly run: (arg: Arg) => Effect.Effect<A, E, R>;
+			readonly mutationFn?: (arg: Arg) => Effect.Effect<A, E, R>;
+	  };
+
+export type MutationOptions<
+	Arg,
+	A,
+	E = never,
+	R = never,
+> = MutationSharedOptions<Arg, A, R> & MutationFnOptions<Arg, A, E, R>;
+
 export type QueryAtomFactoryInput<Arg, A, E, R> =
 	| QueryAtomFactoryOptions<Arg, A, E, never>
 	| (QueryAtomFactoryOptions<Arg, A, E, R> & {
@@ -102,16 +160,42 @@ export type MutationInput<Arg, A, E, R> =
 			readonly runtime: QueryRuntime<R>;
 	  });
 
-export type CreateQueryAtomInput<A, E, R> =
-	| (Omit<QueryAtomFactoryOptions<void, A, E, never>, "key" | "query"> & {
+type CreateQueryAtomSharedOptions<A, E, R> = Omit<
+	QueryAtomFactorySharedOptions<void, A, E, R>,
+	"runtime"
+>;
+
+type CreateQueryAtomKeyOptions =
+	| {
+			readonly queryKey: QueryKey;
+			readonly key?: QueryKey;
+	  }
+	| {
 			readonly key: QueryKey;
-			readonly query: Effect.Effect<A, E, never>;
-	  })
-	| (Omit<QueryAtomFactoryOptions<void, A, E, R>, "key" | "query"> & {
-			readonly runtime: QueryRuntime<R>;
-			readonly key: QueryKey;
+			readonly queryKey?: QueryKey;
+	  };
+
+type CreateQueryAtomFnOptions<A, E, R> =
+	| {
+			readonly queryFn: Effect.Effect<A, E, R>;
+			readonly query?: Effect.Effect<A, E, R>;
+	  }
+	| {
 			readonly query: Effect.Effect<A, E, R>;
-	  });
+			readonly queryFn?: Effect.Effect<A, E, R>;
+	  };
+
+export type CreateQueryAtomInput<A, E, R> =
+	| (CreateQueryAtomSharedOptions<A, E, never> &
+			CreateQueryAtomKeyOptions &
+			CreateQueryAtomFnOptions<A, E, never> & {
+				readonly runtime?: undefined;
+			})
+	| (CreateQueryAtomSharedOptions<A, E, R> &
+			CreateQueryAtomKeyOptions &
+			CreateQueryAtomFnOptions<A, E, R> & {
+				readonly runtime: QueryRuntime<R>;
+			});
 
 export type CreateQueryAtomInputWithRuntime<A, E, R> = Extract<
 	CreateQueryAtomInput<A, E, R>,
@@ -191,12 +275,14 @@ export type QueryRuntimeWithLayer<R = never, E = never> = QueryRuntime<R, E> & {
 
 export const defaultPolicy = Object.freeze({
 	staleTime: "0 millis",
+	gcTime: "5 minutes",
 	idleTimeToLive: "5 minutes",
 	refetchOnMount: true,
 	refetchOnReconnect: true,
 	refetchOnWindowFocus: true,
 }) satisfies {
 	readonly staleTime: Duration.Input;
+	readonly gcTime: Duration.Input;
 	readonly idleTimeToLive: Duration.Input;
 	readonly refetchOnMount: boolean;
 	readonly refetchOnReconnect: boolean;
