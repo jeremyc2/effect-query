@@ -2,7 +2,7 @@
 	"name": "effect-query",
 	"module": "index.ts",
 	"scripts": {
-		"typecheck": "tsgo",
+		"typecheck": "tsgo && bun --cwd examples/react-bun typecheck",
 		"all": "bun typecheck && bun check && bun test",
 		"example:vite-plus": "bun --cwd examples/vite-plus dev",
 		"check": "bun --bun biome check --write && bun --bun oxlint -c .oxlintrc.jsonc",
@@ -14,7 +14,7 @@
 		"@effect/tsgo": "^0.2.1",
 		"@oxlint/plugins": "^1.58.0",
 		"@types/bun": "latest",
-		"@typescript/native-preview": "^7.0.0-dev.20260403.1",
+		"@typescript/native-preview": "^7.0.0-dev.20260404.1",
 		"oxlint": "^1.58.0"
 	},
 	"private": true,
