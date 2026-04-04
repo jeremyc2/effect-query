@@ -1,3 +1,4 @@
+import { Cause } from "effect";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -92,7 +93,7 @@ export function APITester() {
 			setResponseValue(exit.value);
 			return;
 		}
-		setResponseValue(String(exit.cause));
+		setResponseValue(Cause.pretty(exit.cause));
 	};
 
 	return (
