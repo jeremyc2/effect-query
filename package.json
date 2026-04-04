@@ -4,6 +4,7 @@
 	"scripts": {
 		"typecheck": "tsgo && bun --cwd examples/react-bun typecheck",
 		"all": "bun typecheck && bun check && bun test",
+		"example:react-bun": "bun --cwd examples/react-bun dev",
 		"example:vite-plus": "bun --cwd examples/vite-plus dev",
 		"check": "bun --bun biome check --write && bun --bun oxlint -c .oxlintrc.jsonc",
 		"prepare": "effect-tsgo patch"
