@@ -1,34 +1,27 @@
-# Effect-First TanStack Concepts
+# How TanStack Query concepts map to `effect-query`
 
-`effect-query` owes a lot to TanStack Query. The shape of the problem is the
-same: remote state is not the same thing as local UI state, and it deserves
-first-class tools for caching, refetching, retries, invalidation, hydration,
-and mutation workflows.
+If you already know TanStack Query, the hard part of `effect-query` is not the
+problem space. It is the shift in what counts as the center of the API.
 
-At the same time, `effect-query` is not trying to be "TanStack Query with
-different imports". It starts from a different center of gravity:
+TanStack Query teaches a useful set of server-state ideas: cache identity,
+staleness, retries, invalidation, hydration, refetch triggers, and mutation
+workflows. `effect-query` keeps those ideas, but it routes them through Effect,
+query atoms, mutation atoms, and the query runtime instead of a client-plus-hook
+surface.
 
-- query state is read through **query atoms** and **query atom factories**
-- asynchronous work is expressed as **Effect**, not `Promise`
-- the cache runtime is still global orchestration, but the reactive surface is
-  **per entry**, not one broad client snapshot
-- local state and remote state both live naturally in the Effect Atom world
+This guide is for people who already have TanStack Query instincts and want to
+know where those instincts still apply, where the library intentionally differs,
+and where the current gaps still are.
 
-So the library ends up feeling more **Effect-native** than React-client-native,
-even when it expands on ideas TanStack popularized.
+## The main shift: atoms are the read model
 
-This post walks through the major concepts from the TanStack Query docs and
-explains how each one maps into `effect-query`.
-
-## The Core Shift
-
-TanStack Query usually starts from a client and a hook:
+TanStack Query usually starts from a client and observers:
 
 - `queryClient`
 - `useQuery(...)`
 - `useMutation(...)`
 
-`effect-query` starts from a runtime and an atom:
+`effect-query` starts from a query runtime and atoms:
 
 - `makeRuntime(...)`
 - `createQueryAtom(...)`
@@ -36,103 +29,117 @@ TanStack Query usually starts from a client and a hook:
 - `createMutationAtom(...)`
 - `createMutationAtomFactory(...)`
 
-That sounds like a small syntax change, but it pushes the architecture in a
-different direction.
+That sounds cosmetic until you feel what it changes. In TanStack Query,
+components subscribe through observers hanging off a central client. In
+`effect-query`, the thing your UI reads is already an atom.
 
-In TanStack Query, components subscribe through observers hanging off a central
-client. In `effect-query`, the thing your UI reads is already an atom. That
-means remote state composition fits directly into the same reactive model as the
-rest of an Effect Atom app.
+```mermaid
+flowchart LR
+    TanStack["TanStack Query"] --> Client["queryClient"]
+    Client --> Observer["observer / useQuery"]
+    Observer --> UI1["UI"]
 
-## Important Defaults
+    EffectQuery["effect-query"] --> Runtime["query runtime"]
+    Runtime --> Entry["query entry"]
+    Entry --> Atom["query atom"]
+    Atom --> UI2["UI"]
+```
 
-TanStack Query is famous for having sharp defaults:
+The difference is not just vocabulary. It changes the reactive shape of the
+whole library.
 
-- cached data becomes stale by default
-- stale queries refetch on mount, focus, and reconnect
-- inactive data is retained for a while before garbage collection
+## The same problem space, a different center of gravity
 
-`effect-query` keeps that general spirit.
+`effect-query` is still about remote state:
+
+- cached data is not the same thing as local UI state
+- stale data needs refetch rules
+- writes need invalidation and update hooks
+- server rendering needs `hydrate(...)` and `dehydrate(...)`
+
+What changes is the center of gravity:
+
+- query state is read through **query atoms** and **query atom factories**
+- async work is expressed as `Effect`, not `Promise`
+- invalidation is driven by **reactivity keys**
+- the query runtime orchestrates work, but the UI subscribes per entry
+
+That makes the library feel more Effect-native than React-client-native, even
+when it is solving the same class of problems as TanStack Query.
+
+## Important defaults still matter
+
+TanStack Query is opinionated about defaults. `effect-query` keeps that spirit.
 
 - `staleTime` controls freshness
-- `gcTime` controls cache retention
-- refetch behavior is driven by `refetchOnMount`,
-  `refetchOnWindowFocus`, and `refetchOnReconnect`
+- `gcTime` controls retention
+- `refetchOnMount`, `refetchOnWindowFocus`, and `refetchOnReconnect` control
+  automatic refetches
 
-The main difference is where these defaults live. In TanStack Query they feel
-like client policy. In `effect-query` they feel like **query runtime policy**
-plus **per-entry atom behavior**.
+The difference is where those defaults live. In TanStack Query they feel like
+client policy. In `effect-query` they feel like query-runtime policy plus
+per-entry atom behavior.
 
-## Queries
+## Queries: one entry, one query atom
 
 TanStack Query has one conceptual unit: a query observer around a query key.
 
-`effect-query` splits this into two explicit terms:
+`effect-query` splits that into two explicit concepts:
 
 - a **query atom** for one cache entry
-- a **query atom factory** for parameterized queries
-
-That distinction is deliberate. We want the reusable definition and the concrete
-reactive value to be separate concepts.
+- a **query atom factory** for a parameterized family of entries
 
 ```ts
 const userQuery = createQueryAtomFactory({
-	runtime,
-	queryKey: (userId: string) => ["user", userId],
-	queryFn: (userId) => fetchUser(userId),
+  queryKey: (userId: string) => ["user", userId],
+  queryFn: (userId: string) => fetchUser(userId),
 });
 
 const userAtom = userQuery("1");
 ```
 
-TanStack Query can express the same thing, but `effect-query` makes the
-reactive value itself first-class.
+TanStack Query can express the same underlying idea. `effect-query` just makes
+the reactive value first-class instead of treating it as an observer hanging off
+somewhere else.
 
-## Query Keys
+## Query keys still identify cache entries
 
-This part is very close to TanStack Query.
+This part should feel familiar.
 
-- `queryKey` is the identity of cached data
-- it is hashed for cache lookup
-- parameterized query atom factories derive different entries from different
-  keys
+- `queryKey` identifies cached data
+- it is hashed for lookup
+- different arguments produce different query entries
 
-The Effect-first twist is that the query key is not only cache identity. It
-also lives alongside **reactivity keys**, which handle invalidation targeting in
-a way that feels closer to Effect Atom dependency systems than to TanStack's
-filter object API.
+The twist is that cache identity is not the whole invalidation story. Query keys
+identify entries; **reactivity keys** identify invalidation relationships.
 
-## Query Functions
+## Query functions speak `Effect`
 
-This is where the library starts feeling much more like Effect.
+This is where the library stops feeling like a small wrapper around TanStack
+Query and starts feeling like its own thing.
 
 TanStack Query query functions return promises. `effect-query` query functions
 return `Effect`.
 
 ```ts
 const userQuery = createQueryAtomFactory({
-	runtime,
-	queryKey: (userId: string) => ["user", userId],
-	queryFn: (userId, { queryKey, signal }) =>
-		UserApi.use((api) => api.fetchUser(userId, { queryKey, signal })),
+  queryKey: (userId: string) => ["user", userId],
+  queryFn: (userId: string, { queryKey, signal }) =>
+    UserApi.use((api) => api.fetchUser(userId, { queryKey, signal })),
 });
 ```
 
-That buys us a few things:
+That buys a few things immediately:
 
-- query work can depend on runtime services and layers naturally
-- retries compose as `Effect.retry(...)`
-- cancellation maps onto `AbortSignal` and fiber interruption
-- request logic stays in the Effect world instead of crossing back and forth
-  into promise wrappers
+- query work can depend on services and layers naturally
+- retries compose as `Schedule`
+- cancellation can follow `AbortSignal` and fiber interruption
+- request logic stays in one execution model instead of bouncing in and out of
+  promise wrappers
 
-TanStack Query's function contract is simple and popular. `effect-query` pushes
-further into the host ecosystem and says: if your app is already Effect-based,
-your server-state layer should speak Effect natively too.
+## Query options are familiar on purpose
 
-## Query Options
-
-The public option names are intentionally close to TanStack Query now:
+The option names are intentionally close to TanStack Query:
 
 - `queryKey`
 - `queryFn`
@@ -144,46 +151,43 @@ The public option names are intentionally close to TanStack Query now:
 - `placeholderData`
 - `networkMode`
 
-That compatibility is useful because the concepts are good. But the semantics
-still land in an Effect Atom environment:
+That familiarity is useful because the concepts are useful. The semantic shift
+is that the option object feeds a query atom or query atom factory, not a React
+hook call.
 
-- `queryOptions(...)` is just an identity helper
-- a query option object feeds a query atom factory, not a React hook call
-- query options shape the reactive object you read, not just a hook observer
+## Network mode is the same feature in a different engine
 
-## Network Mode
+`networkMode` exists because online/offline behavior matters no matter which
+library you use.
 
-TanStack Query uses `networkMode` to control how aggressively queries interact
-with connectivity state.
-
-`effect-query` supports the same user-facing concept:
+`effect-query` currently supports:
 
 - `"online"`
 - `"always"`
 - `"offlineFirst"` is still partial
 
-The implementation is different in flavor. Since query execution already lives
-in the runtime/store layer, online/offline behavior becomes runtime
-orchestration around query entry execution rather than hook-level policy.
+The user-facing concept is the same as TanStack Query. The implementation is
+different in flavor: connectivity behavior is handled by the query runtime and
+its entries rather than by hook-level observer policy.
 
-## Parallel Queries
+The concept tests back this up:
 
-TanStack Query solves parallel queries by letting multiple queries exist side by
-side in one render.
+- when `networkMode` is `"online"`, fetches pause while offline and resume on
+  reconnect
+- when it is `"always"`, fetches keep running even while offline
 
-`effect-query` does the same thing, but the composition reads more like normal
-reactive data composition:
+## Parallel queries do not need a special composition primitive
 
-- call `useAtomValue(...)` on multiple query atoms side by side
-- or compose several query atoms into one derived atom and read that once
+TanStack Query makes parallel fetching feel natural through multiple hook calls
+or `useQueries(...)`.
+
+`effect-query` gets parallelism from the atom model itself:
+
+- read multiple query atoms side by side
+- or compose them into one larger atom
 - each query atom still subscribes only to its own entry
-- unrelated entries do not wake each other up
 
-This is one of the nicest places where the Effect Atom foundation shows through.
-Parallel remote state does not require a special array API to feel natural. It
-is just multiple atoms being read together.
-
-In React, the simplest version is just two reads:
+In React, the straightforward version is already enough:
 
 ```tsx
 function Screen({ userId, projectId }: Props) {
@@ -203,7 +207,7 @@ function Screen({ userId, projectId }: Props) {
 }
 ```
 
-If you want a single `useAtomValue(...)`, compose the query atoms first:
+If you want one `useAtomValue(...)`, compose the query atoms first:
 
 ```tsx
 import * as Atom from "effect/unstable/reactivity/Atom";
@@ -233,33 +237,28 @@ function Screen({ userId, projectId }: Props) {
 }
 ```
 
-That is the main difference from TanStack Query: `effect-query` does not need a
-special `useQueries`-style primitive to make parallel remote state possible.
-The atom layer is already the composition layer.
+So the rule of thumb is simple: the atom layer is already the composition layer.
 
-## Dependent Queries
+## Dependent queries can use `enabled`, but they do not stop there
 
-TanStack Query often models dependent queries with `enabled`.
-
-`effect-query` supports that same pattern directly:
+TanStack Query often models dependent queries with `enabled`. That pattern still
+works here:
 
 ```ts
 const userQuery = createQueryAtomFactory({
   queryKey: (id: string) => ["user", id],
-  queryFn: fetchUser,
+  queryFn: (id: string) => fetchUser(id),
 });
 
 const projectsQuery = createQueryAtomFactory({
   queryKey: (userId: string) => ["projects", userId],
   enabled: (userId: string | undefined) => userId !== undefined,
-  queryFn: (userId) => fetchProjectsForUser(userId),
+  queryFn: (userId: string) => fetchProjectsForUser(userId),
 });
 ```
 
-That covers the familiar "do not fetch until this value exists" case.
-
-But the more Effect Atom-native pattern is to compose atoms directly when the
-dependency is really part of your reactive model:
+But atoms give you a second option when the dependency is really part of your
+reactive model:
 
 ```tsx
 import * as Atom from "effect/unstable/reactivity/Atom";
@@ -298,28 +297,12 @@ function Screen({ email }: Props) {
 }
 ```
 
-That is the main difference from TanStack Query: dependent queries are not only
-an option flag story. They can also just be reactive composition.
+That is a good example of the broader design: `enabled` still exists, but it is
+not the only way to describe dependency.
 
-So the practical rule of thumb in `effect-query` is:
+## Status and background fetching stay explicit
 
-- use `enabled` when the query should stay defined but idle until an input is ready
-- compose atoms when one piece of remote state genuinely determines whether or how another piece should be read
-
-## Background Fetching Indicators
-
-TanStack Query has rich status semantics like:
-
-- `status`
-- `fetchStatus`
-- `isPending`
-- `isFetching`
-- `isRefetching`
-
-We now mirror that style more closely, but with a cleaner result shape that does
-not leak raw Effect `AsyncResult` fields.
-
-So the query result you read from an atom exposes:
+The query result surface tracks the distinctions you care about:
 
 - `status`
 - `fetchStatus`
@@ -333,60 +316,30 @@ So the query result you read from an atom exposes:
 - `failureCause`
 - `dataUpdatedAt`
 
-The important Effect-first choice here is not the names. It is that this result
-is the thing hanging off an atom, not a wrapper around a hook observer.
+The important part is not just the field list. It is that this result hangs off
+an atom rather than off a hook observer.
 
-## Window Focus Refetching
+## Focus refetching, polling, and disabling are runtime orchestration
 
-Conceptually this matches TanStack Query closely.
+The familiar features are there:
 
 - stale active queries can refetch on focus
-- the behavior is configurable per query
+- `refetchInterval` supports polling
+- `enabled` keeps automatic work idle while disabled
 
-The difference is how it is triggered. The runtime/store handles a focus event
-and scans entries that need work. Query atoms then react to their own entry
-updates.
+What changes is the implementation boundary. The query runtime scans entries and
+coordinates work. Query atoms react to entry updates. The runtime is the
+orchestrator, not the main reactive surface.
 
-That split keeps the global store as orchestration and the atom as the narrow
-reactive surface.
+That distinction matters because it keeps unrelated entries from waking each
+other up. [`docs/reactive-topology.md`](./reactive-topology.md) covers that
+contract directly.
 
-## Polling
+## Retries use Effect schedules, not a tiny retry DSL
 
-TanStack Query exposes polling through `refetchInterval`.
-
-`effect-query` does too.
-
-But the implementation is again more runtime-entry-oriented than observer-client
-oriented:
-
-- polling belongs to active query entries
-- it is managed in the store
-- the atom reflects the entry state
-
-So the public idea is familiar, while the internal story stays closer to Effect
-runtime coordination.
-
-## Disabling And Pausing Queries
-
-`enabled` works the way you would expect:
-
-- automatic work stays idle when disabled
-- manual refresh is still possible
-
-What is different is that "disabled query" fits into a larger Effect Atom mental
-model. Often you do not need a special skip mechanism because the surrounding
-atoms already control whether a query atom is even being read.
-
-## Query Retries
-
-TanStack Query uses options like `retry` and `retryDelay`.
-
-`effect-query` supports retries, but leans toward **Effect schedules** rather
-than recreating the entire TanStack option API.
-
-That is a very explicit example of "TanStack concept, Effect-native
-implementation". The feature exists, but it composes with the Effect ecosystem
-instead of hiding that ecosystem.
+TanStack Query exposes retries through options like `retry` and `retryDelay`.
+`effect-query` supports retries too, but the Effect-native version leans on
+`Schedule`.
 
 ```ts
 import * as Effect from "effect/Effect";
@@ -411,115 +364,82 @@ const userQuery = createQueryAtomFactory({
 });
 ```
 
-The important difference from TanStack Query is that retries are not configured
-through a small built-in DSL of numbers and callbacks. They are configured with
-an Effect schedule, so the retry policy can stay in the same language as the
-rest of your Effect program.
+That keeps retry policy in the same language as the rest of your Effect
+program. You do not drop into a smaller built-in callback DSL just to express
+timing.
 
-## Paginated Queries
+## Placeholder data, initial data, and pagination are all there, but not equally polished
 
-TanStack Query has dedicated pagination guidance and helpers like
-`keepPreviousData`.
+Several TanStack Query concepts already map well:
 
-`effect-query` currently approaches pagination through parameterized query atom
-factories:
+- `initialData` and `initialDataUpdatedAt` seed shared query entries
+- `placeholderData` is shown during the initial fetch without persisting to the
+  cache
+- paginated queries work naturally through query atom factories
 
-- page number lives in the query key
-- each page is its own cache entry
-- atoms give you natural per-page subscriptions
+The tests confirm the placeholder behavior: the atom can expose placeholder
+data while a fetch is in flight, while `peek(...)` still sees the underlying
+pending cache state.
 
-This works well, but it is still more primitive than TanStack's dedicated
-pagination ergonomics. It is a good example of parity in core capability but
-not yet in polish.
+Pagination works, but it is still lower-level than TanStack Query's dedicated
+ergonomics like `keepPreviousData`.
 
-## Infinite Queries
+## Infinite queries are still a real gap
 
-This is still a gap.
+This is the cleanest "not yet" in the current surface.
 
-TanStack Query has a dedicated infinite query model. `effect-query` does not
-yet have its own first-class infinite query helper. Today you would build that
-structure yourself from atoms and Effect, but the library does not yet package
-that into a dedicated abstraction.
+TanStack Query has a dedicated infinite-query model. `effect-query` does not
+yet have a first-class infinite-query helper. You can build the pieces yourself
+from atoms and Effect, but the library does not yet package that into one
+blessed abstraction.
 
-## Initial Data
+## Mutations are atoms too
 
-This maps cleanly:
+TanStack Query splits reads and writes across `useQuery(...)` and
+`useMutation(...)`. `effect-query` keeps the split in capability, but not in the
+mental model.
 
-- `initialData`
-- `initialDataUpdatedAt`
-
-The main difference is again where the state lives. In `effect-query`, seeded
-data becomes part of the shared query entry that query atoms subscribe to.
-
-## Placeholder Query Data
-
-Placeholder data is supported too, but with a slightly different tone than
-TanStack Query.
-
-- it is observer-facing, not cache-persisted
-- it helps the initial read feel useful before the first real success lands
-
-That is a place where the atom model helps because the query result being read
-already feels like reactive UI data, not just a cache client snapshot.
-
-## Mutations
-
-TanStack Query has mutations. `effect-query` now has:
+The mutation side looks like this:
 
 - `createMutationAtom(...)`
 - `createMutationAtomFactory(...)`
+- `mutationOptions(...)`
 
-This is the same overall idea, but brought into the atom vocabulary so remote
-writes sit next to remote reads instead of feeling like a parallel API world.
+Mutation atoms expose an explicit result surface with fields like `status`,
+`isPending`, `isSuccess`, `isError`, `data`, `error`, and `failureCause`.
 
-Like queries, mutation atoms expose a library-owned result surface with
-first-class fields like `status`, `isPending`, `isSuccess`, `isError`, `data`,
-`error`, and `failureCause`.
+That makes remote writes feel like part of the same reactive world as remote
+reads instead of a parallel API universe.
 
-That is intentionally more Effect-first than TanStack Query in one important
-way: the public mutation state is ours, but the execution model underneath is
-still powered by Effect and Effect Atom. We keep the underlying async state
-machine as an implementation detail instead of leaking it into application
-code.
+## Invalidation is relationship-oriented
 
-## Query Invalidation
-
-TanStack Query invalidation often works through query filters.
+TanStack Query invalidation is usually described in terms of query filters over
+query keys.
 
 `effect-query` chooses **reactivity keys** instead.
-
-This is one of the most distinctive design differences in the library. Instead
-of treating invalidation mostly as a query-key filter language, we let query
-definitions declare the reactivity surfaces they care about, and mutation or
-manual invalidation targets those surfaces.
-
-That feels much more Effect Atom-like:
-
-- declare reactive relationships
-- invalidate by relationship
-- keep the broad client scan as orchestration, not as the primary user-facing
-  model
 
 ```ts
 const userQuery = createQueryAtomFactory({
   queryKey: (userId: string) => ["user", userId],
+  staleTime: "1 hour",
   reactivityKeys: (userId: string) => ({
     user: [userId],
     users: ["all"],
   }),
-  queryFn: fetchUser,
+  queryFn: (userId: string) => fetchUser(userId),
 });
 
 const usersQuery = createQueryAtom({
   queryKey: ["users"],
+  staleTime: "1 hour",
   reactivityKeys: () => ({
     users: ["all"],
   }),
-  queryFn: fetchUsers,
+  queryFn: () => fetchUsers(),
 });
 
 const updateUser = createMutationAtom({
-  mutationFn: saveUser,
+  mutationFn: (input: { readonly userId: string }) => saveUser(input),
   invalidate: (input) => ({
     user: [input.userId],
     users: ["all"],
@@ -527,212 +447,121 @@ const updateUser = createMutationAtom({
 });
 ```
 
-In that example:
-
-- the single-user query declares that it depends on both `user:id` and the broader `users:all` relationship
-- the list query declares that it depends on `users:all`
-- the mutation invalidates those same relationships
-
-So invalidation is not "find every query whose key matches this filter". It is
-"refresh every query entry that declared itself part of this reactive
-relationship."
-
-## Invalidation From Mutations
-
-This is built directly into mutation options:
-
-```ts
-const updateUser = createMutationAtom({
-	runtime,
-	mutationFn: saveUser,
-	invalidate: (input) => ({
-		users: ["all"],
-		user: [input.userId],
-	}),
-});
-```
-
-TanStack Query often does this through `onSuccess` plus `queryClient`
-imperative calls. `effect-query` supports imperative cache work too, but it also
-lets invalidation stay declarative at the mutation definition level.
-
-## Updates From Mutation Responses
-
-This maps naturally onto `onSuccess` and `setData`.
-
-The difference is the feel:
-
-- TanStack Query says "update the client cache"
-- `effect-query` says "update the matching query atom factory entry"
-
-That is a small wording difference, but it reinforces the atom-native model.
-
-## Optimistic Updates
-
-Optimistic updates work well in `effect-query`:
-
-- write optimistic data with `setData`
-- run the mutation
-- roll back or invalidate as needed
-
-The nice part is that this composes directly with query atoms as reactive
-values. You are not just patching a global cache object; you are updating the
-entry that a specific query atom will expose to the UI.
-
-## Query Cancellation
-
-TanStack Query supports cancellation through abort-aware query functions.
-
-`effect-query` does too, and this is another place where Effect helps:
-
-- `queryFn` receives `signal`
-- the runtime/store can cancel in-flight work
-- interruption semantics compose naturally with Effect execution
-
-So the surface concept is familiar, but the underlying machinery feels much more
-native in an Effect codebase.
-
-## Scroll Restoration
-
-This is not built in yet.
-
-TanStack Query has stronger documented patterns here because it lives so
-comfortably in the React app/router world. `effect-query` does not yet have a
-dedicated abstraction for this.
-
-## Filters
-
-TanStack Query has a broader filter model around queries and invalidation.
-
-`effect-query` only partially overlaps here. The library is more opinionated:
+That is a real design choice, not just a different name.
 
 - query keys identify entries
 - reactivity keys identify invalidation groupings
+- mutations invalidate relationships, not ad-hoc client filters
 
-That is narrower than TanStack's filter surface, but also simpler and more
-aligned with the reactive-entry mental model.
+The concept tests enforce the payoff: invalidating one relationship refreshes
+the matching entries without waking unrelated ones.
 
-## Performance And Request Waterfalls
+## Updates from mutation responses and optimistic updates stay close to the data
 
-TanStack Query has put a lot of thought into request waterfalls, observer
-churn, and unnecessary updates.
+The familiar moves still exist:
 
-`effect-query` takes that seriously too, but the strongest current story is its
-reactive topology:
+- `onSuccess` for follow-up work
+- `setData(...)` for direct cache updates
+- optimistic writes before the mutation, followed by rollback or invalidation
 
-- per-entry `SubscriptionRef`
-- narrow subscriptions
-- no single giant reactive cache snapshot as the main UI surface
+The difference is mostly one of feel.
 
-That is a very direct lesson learned from the broader TanStack ecosystem,
-implemented in a way that fits Effect Atom well.
+- TanStack Query says "update the client cache"
+- `effect-query` says "update the matching query entry that query atoms read"
 
-## Prefetching And Router Integration
+That wording difference sounds small, but it keeps the entry-level reactive
+model front and center.
 
-This is already a strong fit.
+## Cancellation is another place where Effect fits naturally
 
-- `prefetch`
-- `ensure`
-- `peek`
-- `hydrate`
-- `dehydrate`
+TanStack Query supports cancellation through abort-aware query functions.
+`effect-query` does too:
 
-TanStack Query usually routes these ideas through a client. `effect-query`
-routes them through query atoms and query atom factories.
+- `queryFn` receives `signal`
+- `cancel(...)` interrupts in-flight work
+- interruption semantics compose with Effect directly
 
-Again, same concept, more atom-native expression.
+The tests cover both major cases:
 
-## Server Rendering And Hydration
+- cancelling a refetch restores the previous successful value
+- cancelling an initial fetch returns the query to its initial pending state
 
-This concept maps cleanly.
+## Server rendering and hydration map cleanly
+
+Hydration is one of the least surprising transitions from TanStack Query to
+`effect-query`.
 
 - `dehydrate(...)`
 - `hydrate(...)`
 
-Because the data ultimately lives in atom-compatible structures, hydration feels
-like hydrating the reactive graph rather than rehydrating an external cache
-client.
+The conceptual shift is subtle: hydration feels less like rehydrating an
+external cache client and more like hydrating a reactive graph that query atoms
+already read from.
 
-## Advanced Server Rendering
+## What `effect-query` does not copy on purpose
 
-This is still only partially covered.
+Some differences are not temporary gaps. They are deliberate choices.
 
-The basic hydration primitives exist, but the larger framework-specific story is
-not as fully developed as TanStack Query's.
+### The library does not start from a client object
 
-## Caching
+The query runtime exists, but it is orchestration. It is not meant to become
+the one broad thing every consumer stares at.
 
-Caching is one of the clearest shared ideas between the two libraries:
+### The library does not treat invalidation as a general-purpose filter language
 
-- `staleTime`
-- `gcTime`
-- shared entries
-- explicit refresh and invalidation
+Reactivity keys are narrower than TanStack Query filters and more opinionated by
+design.
 
-But `effect-query` frames the cache as a runtime-backed store feeding query
-atoms, not as the one main object the app talks to.
+### The library does not hide Effect
 
-## Render Optimizations
+If your app is already Effect-based, that is a feature. Query work, retries,
+cancellation, and service access should stay in the same programming model.
 
-TanStack Query has done a lot of work around observer notifications and render
-behavior.
+## Trade-offs and current gaps
 
-`effect-query` currently leans on the narrower subscription story that falls out
-of Effect Atom:
+This approach buys a lot, but it is not free.
 
-- each query atom is tied to one entry
-- unrelated query atoms do not have to rerender together
-- the query runtime is not the main reactive surface
+### What gets better
 
-So this area is less feature-rich than TanStack Query today, but philosophically
-very aligned with the same goal.
+- remote state composes like the rest of an Effect Atom app
+- per-entry subscriptions help avoid broad reactive churn
+- retries, cancellation, and service access stay native to Effect
 
-## Why This Feels More Effect-First
+### What gets harder
 
-There are a few repeating themes in all of the sections above.
+- the library feels less instantly familiar to people who want a direct clone of
+  TanStack Query's client-plus-hook API
+- some ergonomics that TanStack Query has polished for years are still partial
+- the docs need to teach more vocabulary because the library is not piggybacking
+  on someone else's public model
 
-### The async model is Effect-native
+### What is still missing
 
-TanStack Query is Promise-native. `effect-query` is Effect-native. That changes
-retries, cancellation, service access, composition, and testing.
+- first-class infinite queries
+- richer aggregate helpers like `useIsFetching(...)`
+- a broader SSR and router guide
+- more ergonomic pagination helpers
 
-### The reactive model is atom-native
+## The short version
 
-TanStack Query builds observers around a central client. `effect-query` exposes
-query atoms directly.
+TanStack Query is still the right comparison because it taught the ecosystem
+which server-state concepts matter.
 
-That makes remote state feel like part of the app's real reactive graph instead
-of a nearby subsystem.
+`effect-query` agrees on the concepts:
 
-### Invalidation is relationship-oriented
-
-Reactivity keys are one of the most "ours" design choices in the library. They
-do not try to fully imitate TanStack Query filters. They lean into a more
-declarative dependency model.
-
-### The store is orchestration, not the main read surface
-
-This is subtle but important. `QueryStore` exists, and it absolutely matters,
-but the UI should care mostly about specific query atoms and mutation atoms.
-
-That is a different emphasis than "everything hangs off the client".
-
-## Closing Thought
-
-The best way to think about `effect-query` is probably:
-
-> TanStack Query taught us which server-state concepts matter. Effect Atom and
-> Effect change how natural those concepts can feel inside an Effect-first app.
-
-So we happily borrow the concepts:
-
+- cache identity
 - staleness
-- garbage collection
 - invalidation
 - hydration
 - refetch triggers
 - polling
 - retries
+- mutation workflows
 
-But we want their final form in this library to feel like they belong to
-Effect, not like a translated React client.
+It disagrees on where those concepts should live.
+
+In `effect-query`, they belong to Effect, query atoms, mutation atoms,
+reactivity keys, and the query runtime. If your app already thinks in those
+terms, the library stops feeling like "TanStack Query with different imports"
+and starts feeling like the server-state layer your Effect app wanted in the
+first place.

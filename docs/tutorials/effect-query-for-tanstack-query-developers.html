@@ -184,9 +184,9 @@
 				<span class="eyebrow">Tutorial</span>
 				<h1>effect-query for TanStack Query developers</h1>
 				<p class="lead">
-					If TanStack Query already makes sense to you, this library is not a
-					left turn. It is the same class of problem with a more atom-first,
-					Effect-shaped API.
+					If TanStack Query already makes sense to you, the hard part here is not
+					server state. The hard part is that the center of the API moved from a
+					client-plus-hook model to atoms plus an Effect runtime.
 				</p>
 				<p>
 					The two terms worth learning early are <strong>query atom</strong> and
@@ -197,12 +197,16 @@
 			</header>
 
 			<section>
-				<h2>Start with one read</h2>
+				<h2>Start with one read: the query moves out of the component</h2>
 				<p>
 					The first difference is right on the surface. In TanStack Query, you
 					usually build the query inside the component. In
 					<code>effect-query</code>, you create the query atom first and read it
 					from the UI later.
+				</p>
+				<p>
+					That sounds small. It is not. It means the reactive value is already a
+					first-class object before React touches it.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -249,11 +253,15 @@ const dashboardAtom = createQueryAtom({
 			</section>
 
 			<section>
-				<h2>Then make it parameterized</h2>
+				<h2>Parameterized queries stop being hooks and become factories</h2>
 				<p>
 					This is the translation worth remembering. What used to be "a hook that
 					takes arguments" becomes a <strong>query atom factory</strong>. Call it
 					with an argument, and you get a <strong>query atom</strong>.
+				</p>
+				<p>
+					If you are looking for the one mental substitution that makes the rest
+					of the library click, it is this one.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -338,12 +346,18 @@ function UserScreen({ userId }: Props) {
 			</section>
 
 			<section>
-				<h2>Query function context is built in</h2>
+				<h2>Query function context is familiar, but the execution model is not</h2>
 				<p>
 					If you are coming from TanStack Query, this should feel familiar.
 					The query function receives the argument you passed to the factory and
 					a context object containing the resolved <code>queryKey</code> and an
 					<code>AbortSignal</code>.
+				</p>
+				<p>
+					The real difference is what you return. Promise-returning request logic
+					becomes Effect-returning request logic, which means retries, services,
+					and interruption stay in the same programming model as the rest of your
+					app.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -373,12 +387,17 @@ function UserScreen({ userId }: Props) {
 			</section>
 
 			<section>
-				<h2>Writes are where the vocabulary pays off</h2>
+				<h2>Writes are where the vocabulary starts paying rent</h2>
 				<p>
 					TanStack Query invalidates by matching query keys.
 					<code>effect-query</code> uses <strong>reactivity keys</strong>
 					instead. You declare them once on the reads, then mutations can
 					invalidate by intent instead of by repeating cache key shapes.
+				</p>
+				<p>
+					This is one of the clearest design choices in the library. Query keys
+					still identify entries, but reactivity keys describe which entries
+					should move together when a write lands.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -455,14 +474,24 @@ const updateUserMutation = createMutationAtom({
 );</code></pre>
 					</article>
 				</div>
+				<aside class="note">
+					<strong>The trade-off:</strong> reactivity keys are more opinionated
+					than TanStack Query filters. The upside is that invalidation rules get
+					declared once on the reads instead of reconstructed at every mutation
+					site.
+				</aside>
 			</section>
 
 			<section>
-				<h2>The imperative API is still here</h2>
+				<h2>You still get the imperative tools, they just hang off the factory</h2>
 				<p>
 					If you liked prefetching, peeking, and hydration before navigation or
 					during app startup, you still get those tools. They just hang off the
 					query atom or query atom factory instead of a central client.
+				</p>
+				<p>
+					So the imperative escape hatch is still there. It is just closer to the
+					query entry you actually mean to touch.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -517,7 +546,7 @@ hydrate(targetRegistry, snapshot);</code></pre>
 			</section>
 
 			<section>
-				<h2>Polling and network mode are separate concerns</h2>
+				<h2>Freshness, polling, and offline behavior are three separate knobs</h2>
 				<p>
 					Just like in TanStack Query, freshness and polling are not the same
 					setting. Use <code>staleTime</code> to define freshness,
@@ -532,10 +561,15 @@ hydrate(targetRegistry, snapshot);</code></pre>
   networkMode: "online",
   queryFn: fetchActivity,
 });</code></pre>
+				<p>
+					If a query should stay fresh for 30 seconds, that does not imply it
+					should poll every 30 seconds. And if it should poll, that still does not
+					answer what should happen while the app is offline.
+				</p>
 			</section>
 
 			<section>
-				<h2>The short version</h2>
+				<h2>What changes in practice</h2>
 				<ul class="rule-list">
 					<li>
 						<code>useQuery(...)</code> becomes <code>createQueryAtom(...)</code>
@@ -555,6 +589,12 @@ hydrate(targetRegistry, snapshot);</code></pre>
 						matching.
 					</li>
 				</ul>
+				<p>
+					If you already know TanStack Query, the shortest accurate summary is:
+					same class of problems, different center of gravity. The queries are
+					still about cache identity, freshness, invalidation, and hydration. They
+					just live in atoms and Effects instead of observers and promises.
+				</p>
 			</section>
 		</main>
 	</body>

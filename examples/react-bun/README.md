@@ -1,23 +1,22 @@
-# React Bun Effect Query Example
+# React + Bun `effect-query` example
 
-This example is the smallest playground in the repo for `effect-query` with
-React and Bun.
+This is the smallest playground in the repo for `effect-query` with React and
+Bun. Use it when you want to sanity-check the runtime, query atoms, and the
+React integration without pulling in the rest of the repo.
 
-## Run it
-
-To install dependencies:
+## Install dependencies
 
 ```bash
 bun install
 ```
 
-To start a development server:
+## Start the dev server
 
 ```bash
 bun dev
 ```
 
-To typecheck the example:
+## Typecheck the example
 
 ```bash
 bun typecheck

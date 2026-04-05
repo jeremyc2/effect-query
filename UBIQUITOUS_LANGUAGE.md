@@ -1,8 +1,11 @@
-# Ubiquitous language
+# Ubiquitous Language
 
-Shared vocabulary. This document is **normative**: it states how we *want* to think and speak about this project—not a mirror of every identifier in the repository.
+This is the project's shared vocabulary. It is **normative**: it tells us how
+we want to talk about the library, not how every existing identifier already
+looks.
 
-Source code, documentation, examples, and conversation should all use the terms in this document.
+Source code, documentation, examples, and conversation should all prefer the
+terms in this document.
 
 ## Guide
 
@@ -18,11 +21,11 @@ Source code, documentation, examples, and conversation should all use the terms 
 
 | Canonical | Aliases to avoid | Origin | Prolif. | Learn |
 | --- | --- | --- | --- | --- |
-| **query atom factory** | `query family`, `query hook factory`, `observer factory` | Coined | 8 | 9 |
+| **query atom factory** | `query family`, `query families`, `query hook factory`, `observer factory` | Coined | 8 | 9 |
 | **query atom** | `useQuery result`, `observer result`, `query family member` | Coined | 7 | 8 |
-| **mutation atom factory** | `mutation family`, `action factory`, `command factory` | Coined | 3 | 5 |
+| **mutation atom factory** | `mutation family`, `mutation families`, `action factory`, `command factory` | Coined | 3 | 5 |
 | **mutation atom** | `useMutation result`, `mutation hook`, `action hook` | Coined | 4 | 6 |
-| **query runtime** | `query client`, `cache client` | Coined | 7 | 8 |
+| **query runtime** | `query client`, `cache client`, `query cache` | Coined | 7 | 8 |
 | **gc time** | `idle TTL`, `idleTimeToLive` | TanStack Query | 5 | 6 |
 | **reactivity keys** | `query filters`, `cache selectors` | Coined | 9 | 9 |
 | **mutation** | `write operation`, `remote write` | TanStack Query | 7 | 8 |

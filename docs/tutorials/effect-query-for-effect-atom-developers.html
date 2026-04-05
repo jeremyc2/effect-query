@@ -188,11 +188,17 @@
 			</header>
 
 			<section>
-				<h2>The first mental shift is tiny</h2>
+				<h2>The first shift is that remote state stops pretending to be local state</h2>
+				<p>
+					If you already think in atoms, <code>effect-query</code> is not asking
+					you to relearn reactivity. It is asking you to stop hand-rolling
+					server-state policy in places where plain atoms were never the right
+					abstraction.
+				</p>
 				<p>
 					From the component's point of view, both values are atoms. The
-					difference is that a query atom comes with the server-state machinery
-					already attached.
+					difference is that a query atom comes with cache identity, freshness,
+					cancellation, and hydration already attached.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -221,18 +227,23 @@ const dashboardAtom = createQueryAtom({
 					</article>
 				</div>
 				<aside class="note">
-					<strong>In practice:</strong> if the value is local, keep using a plain
-					atom. If it is remote and should be cached, promote it to a query atom.
+					<strong>In practice:</strong> keep plain atoms for local truth. Use a
+					query atom when the value comes from somewhere else and should survive
+					refetches, retries, and hydration.
 				</aside>
 			</section>
 
 			<section>
-				<h2>Query functions get request context</h2>
+				<h2>Query functions get the request context plain atoms usually make you invent</h2>
 				<p>
 					Query atoms are still atom-shaped from the outside, but the underlying
-					query function gets a little more structure than a plain async atom.
-					It receives the resolved <code>queryKey</code> and an
+					query function gets a little more structure than a plain async atom. It
+					receives the resolved <code>queryKey</code> and an
 					<code>AbortSignal</code> so request layers can handle cancellation.
+				</p>
+				<p>
+					That means you do not need to smuggle metadata through closures just to
+					handle retries, logging, or abort-aware APIs.
 				</p>
 				<pre><code>const taskAtomFactory = createQueryAtomFactory({
   runtime: queryRuntime,
@@ -243,11 +254,15 @@ const dashboardAtom = createQueryAtom({
 			</section>
 
 			<section>
-				<h2>Parameterization becomes a factory</h2>
+				<h2>Parameterized remote reads become query atom factories</h2>
 				<p>
 					Plain atoms are still great for local selection. The new move is that
 					a parameterized remote read becomes a <strong>query atom factory</strong>.
 					Call it with an argument and you get the atom you want to read.
+				</p>
+				<p>
+					This is the term worth learning early because it replaces a pile of
+					ad-hoc "async atom with arguments" patterns with one consistent model.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -315,14 +330,24 @@ function DashboardScreen() {
 }</code></pre>
 					</article>
 				</div>
+				<aside class="note">
+					<strong>The trade-off:</strong> there is a little more vocabulary up
+					front. The payoff is that parameterized remote state has one explicit
+					home instead of being rebuilt from scratch in every feature.
+				</aside>
 			</section>
 
 			<section>
-				<h2>Writes split cleanly</h2>
+				<h2>Local writes stay atoms; remote writes become mutations</h2>
 				<p>
 					The division of labor is refreshingly simple. Local writes stay as
 					writable atoms. Remote writes become mutations, because mutations know
 					how to invalidate matching query atoms afterward.
+				</p>
+				<p>
+					This is one of the biggest quality-of-life improvements over "just use
+					async atoms for everything." You stop making every write path rediscover
+					cache invalidation the hard way.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -399,18 +424,23 @@ const cachedTask = await Effect.runPromise(taskAtomFactory.peek("task-1"));</cod
 					</article>
 				</div>
 				<aside class="note">
-					<strong>The nice payoff:</strong> local state and remote state still
-					feel related, but they stop pretending to be the same problem.
+					<strong>The payoff:</strong> local state and remote state still feel
+					related, but they stop pretending to be the same problem.
 				</aside>
 			</section>
 
 			<section>
-				<h2>You can use plain async atoms, but you probably should not</h2>
+				<h2>Yes, you can model remote data with plain atoms. That does not make it a good idea.</h2>
 				<p>
 					Yes, you can model remote data with plain atoms. The catch is that you
 					then inherit all the boring parts: cache identity, freshness, retries,
 					invalidation, hydration, and imperative cache helpers. Query atoms
 					exist to take that burden off your plate.
+				</p>
+				<p>
+					Plain async atoms are still great when you truly want one-off async
+					computation. They are a bad bargain when you actually want a shared
+					server-state layer.
 				</p>
 				<div class="comparison">
 					<article class="snippet">
@@ -472,7 +502,7 @@ const taskAtomFactory = createQueryAtomFactory({
 			</section>
 
 			<section>
-				<h2>The short version</h2>
+				<h2>What to reach for in practice</h2>
 				<ul class="rule-list">
 					<li>
 						Keep plain atoms for local state, derived state, and local writes.
@@ -488,6 +518,12 @@ const taskAtomFactory = createQueryAtomFactory({
 						atoms.
 					</li>
 				</ul>
+				<p>
+					If you only remember one rule, make it this one: when the problem is
+					"what does the app know right now," use atoms. When the problem is
+					"how do we keep a remote value fresh and coherent over time," use query
+					atoms.
+				</p>
 			</section>
 		</main>
 	</body>

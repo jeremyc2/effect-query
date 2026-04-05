@@ -39,7 +39,7 @@ The package will:
 
 - keep `query`, `mutation`, `invalidate`, `hydrate`, and `dehydrate` as public terms
 - avoid `QueryClient`, observer classes, and `useQuery`-style public interfaces
-- use query families and query atoms as the primary read model
+- use query atom factories and query atoms as the primary read model
 - use Effect Atom plus Effect reactivity as the primary React integration story
 - use reactivity keys as the default invalidation model
 - treat TanStack Query as inspiration for the problem space, not for the API shape

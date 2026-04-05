@@ -1,6 +1,9 @@
 # Ideaboard
 
-Low-stakes **brainstorm** space: half-baked worries, gut reactions, and back-and-forth. Nothing here needs to be defensible in court. The names **less founded** and **ideaboard** are the point: vibes over receipts.
+This is the repo's low-stakes brainstorm corner: half-baked worries, gut
+reactions, and back-and-forth before anything deserves a real design doc.
+Nothing here needs to be airtight. The names **less founded** and
+**ideaboard** are the point: vibes over receipts.
 
 ## Files
 
@@ -14,4 +17,4 @@ Low-stakes **brainstorm** space: half-baked worries, gut reactions, and back-and
 
 1. **The human does not edit `LESS_FOUNDED_GUESSWORK.md`.** Only the assistant (or other AI tooling you designate) updates it, usually after you change `LESS_FOUNDED_CRITICISM.md` or ask for a pass.
 2. **The AI does not edit `LESS_FOUNDED_CRITICISM.md` or `LESS_FOUNDED_REBUTTAL.md`.** Those are your documents.
-3. **Ordering:** You sketch or revise items in `LESS_FOUNDED_CRITICISM.md` → the assistant fills or updates `LESS_FOUNDED_GUESSWORK.md` → you react in `LESS_FOUNDED_REBUTTAL.md`.
+3. **Ordering:** You sketch or revise items in `LESS_FOUNDED_CRITICISM.md` -> the assistant fills or updates `LESS_FOUNDED_GUESSWORK.md` -> you react in `LESS_FOUNDED_REBUTTAL.md`.
