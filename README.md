@@ -75,7 +75,7 @@ Mutations use `createMutationAtom(...)`, `createMutationAtomFactory(...)`, and
 ## Docs
 
 - [TanStack concept coverage](./docs/tanstack-concepts-support.md)
-- [Effect-first TanStack concepts](./docs/blog/effect-first-tanstack-concepts.md)
+- [Effect-first TanStack concepts](./docs/effect-first-tanstack-concepts.md)
 - [Reactive topology notes](./docs/reactive-topology.md)
 - [Tutorial for TanStack Query developers](./docs/tutorials/effect-query-for-tanstack-query-developers.html)
 - [Tutorial for Effect Atom developers](./docs/tutorials/effect-query-for-effect-atom-developers.html)
