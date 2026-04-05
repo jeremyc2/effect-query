@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createQueryAtomFactory, makeRuntime } from "../EffectQuery.ts";
-import { assertSome } from "../testing-utils.ts";
+import { assertSome, waitForQuerySuccess } from "../testing-utils.ts";
 
 test("placeholder query data is shown during the initial fetch without persisting", async () => {
 	const runtime = makeRuntime();
@@ -31,9 +31,7 @@ test("placeholder query data is shown during the initial fetch without persistin
 	expect(peeked.value.isPending).toBe(true);
 
 	expect(
-		await Effect.runPromise(
-			AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-		),
+		(await Effect.runPromise(waitForQuerySuccess(registry, atom))).data,
 	).toBe("1:fetched");
 	release();
 });

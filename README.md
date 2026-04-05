@@ -18,9 +18,9 @@ A vibe fork of [TanStack Query](https://github.com/TanStack/query), written in [
   carry Effect layers and services.
 - Query functions return `Effect`s, not Promises.
 - Query functions receive a context object with `queryKey` and `signal`.
-- Query results expose status flags and data directly on the value you read from
-  the atom, for example `result.isPending`, `result.isSuccess`, `result.data`,
-  and `result.error`.
+- Query and mutation results expose status flags and data directly on the value
+  you read from the atom, for example `result.isPending`,
+  `result.isSuccess`, `result.isError`, `result.data`, and `result.error`.
 
 ## Small example
 
@@ -75,6 +75,7 @@ Mutations use `createMutationAtom(...)`, `createMutationAtomFactory(...)`, and
 ## Docs
 
 - [TanStack concept coverage](./docs/tanstack-concepts-support.md)
+- [Effect-first TanStack concepts](./docs/blog/effect-first-tanstack-concepts.md)
 - [Reactive topology notes](./docs/reactive-topology.md)
 - [Tutorial for TanStack Query developers](./docs/tutorials/effect-query-for-tanstack-query-developers.html)
 - [Tutorial for Effect Atom developers](./docs/tutorials/effect-query-for-effect-atom-developers.html)

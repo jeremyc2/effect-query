@@ -7,7 +7,11 @@ import {
 	createQueryAtomFactory,
 	makeRuntime,
 } from "../EffectQuery.ts";
-import { assertSuccess } from "../testing-utils.ts";
+import {
+	assertSuccess,
+	waitForMutationSuccess,
+	waitForQuerySuccess,
+} from "../testing-utils.ts";
 
 interface Comment {
 	readonly id: string;
@@ -63,9 +67,7 @@ test("optimistic updates stay visible until the invalidation refetch resolves", 
 	const atom = taskQuery("task-1");
 	const releaseQuery = registry.mount(atom);
 	const releaseMutation = registry.mount(addComment);
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(waitForQuerySuccess(registry, atom));
 
 	await Effect.runPromise(
 		taskQuery.setData("task-1", (current) => {
@@ -84,23 +86,19 @@ test("optimistic updates stay visible until the invalidation refetch resolves", 
 		taskId: "task-1",
 		body: "Optimistic comment",
 	});
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, addComment, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(waitForMutationSuccess(registry, addComment));
 	await Effect.runPromise(Effect.sleep("0 millis"));
 
 	const duringRefetch = registry.get(atom);
 	assertSuccess(duringRefetch);
-	expect(duringRefetch.waiting).toBe(true);
-	expect(duringRefetch.value.comments.at(-1)).toEqual({
+	expect(duringRefetch.isFetching).toBe(true);
+	expect(duringRefetch.data.comments.at(-1)).toEqual({
 		id: "optimistic-comment",
 		body: "Optimistic comment",
 	});
 
-	const resolved = await Effect.runPromise(
-		AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-	);
-	expect(resolved.comments.at(-1)).toEqual({
+	const resolved = await Effect.runPromise(waitForQuerySuccess(registry, atom));
+	expect(resolved.data.comments.at(-1)).toEqual({
 		id: "comment-2",
 		body: "Optimistic comment",
 	});

@@ -1,5 +1,4 @@
 import * as Hash from "effect/Hash";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type { QueryEntryBase, QueryKey, ReactivityKeySet } from "../types.ts";
 
 export function hashQueryKey(key: QueryKey): string {
@@ -90,14 +89,10 @@ function isReactivityKeyRecord(
 
 export function needsRefetchBase(entry: QueryEntryBase, now: number): boolean {
 	const current = entry.snapshot();
-	if (
-		entry.invalidated ||
-		AsyncResult.isInitial(current) ||
-		AsyncResult.isFailure(current)
-	) {
+	if (entry.invalidated || current.isPending || current.isError) {
 		return true;
 	}
-	return now - current.timestamp >= entry.policy.staleTimeMs;
+	return now - current.dataUpdatedAt >= entry.policy.staleTimeMs;
 }
 
 function stringOrHash(value: unknown): string | number {

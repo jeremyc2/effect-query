@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createQueryAtomFactory, makeRuntime } from "../EffectQuery.ts";
-import { assertSuccess } from "../testing-utils.ts";
+import {
+	assertPending,
+	assertSuccess,
+	waitForQuerySuccess,
+} from "../testing-utils.ts";
 
 test("query cancellation aborts in-flight work and restores the previous value", async () => {
 	const runtime = makeRuntime();
@@ -30,9 +33,7 @@ test("query cancellation aborts in-flight work and restores the previous value",
 	const registry = AtomRegistry.make();
 	const atom = userQuery("1");
 	const release = registry.mount(atom);
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(waitForQuerySuccess(registry, atom));
 
 	Effect.runFork(
 		userQuery.refresh("1").pipe(Effect.catchCause(() => Effect.void)),
@@ -40,7 +41,7 @@ test("query cancellation aborts in-flight work and restores the previous value",
 	await Effect.runPromise(Effect.sleep("0 millis"));
 	const waiting = registry.get(atom);
 	assertSuccess(waiting);
-	expect(waiting.waiting).toBe(true);
+	expect(waiting.isFetching).toBe(true);
 
 	await Effect.runPromise(userQuery.cancel("1"));
 	await Effect.runPromise(Effect.sleep("0 millis"));
@@ -48,8 +49,8 @@ test("query cancellation aborts in-flight work and restores the previous value",
 	expect(aborted).toBe(true);
 	const current = registry.get(atom);
 	assertSuccess(current);
-	expect(current.waiting).toBe(false);
-	expect(current.value).toBe("1:v1");
+	expect(current.isFetching).toBe(false);
+	expect(current.data).toBe("1:v1");
 	release();
 });
 
@@ -77,7 +78,7 @@ test("query cancellation resets an initial fetch back to the initial state", asy
 	await Effect.runPromise(Effect.sleep("0 millis"));
 
 	const current = registry.get(atom);
-	expect(current.pipe(AsyncResult.isInitial)).toBe(true);
-	expect(current.waiting).toBe(false);
+	assertPending(current);
+	expect(current.isFetching).toBe(false);
 	release();
 });

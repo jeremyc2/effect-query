@@ -10,7 +10,6 @@ import type * as Scope from "effect/Scope";
 import type * as Semaphore from "effect/Semaphore";
 import type * as ServiceMap from "effect/ServiceMap";
 import type * as SubscriptionRef from "effect/SubscriptionRef";
-import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type * as Atom from "effect/unstable/reactivity/Atom";
 import type * as Reactivity from "effect/unstable/reactivity/Reactivity";
 import type { QueryStore } from "./store.ts";
@@ -29,7 +28,7 @@ export type QueryInitialDataUpdatedAt<Arg> =
 export type QueryPlaceholderData<Arg, A> =
 	| A
 	| ((arg: Arg, previousValue: A | undefined) => A);
-export interface QueryPending<A, E = never> extends AsyncResult.Initial<A, E> {
+export interface QueryPending {
 	readonly status: "pending";
 	readonly fetchStatus: "fetching" | "idle";
 	readonly isPending: true;
@@ -41,10 +40,9 @@ export interface QueryPending<A, E = never> extends AsyncResult.Initial<A, E> {
 	readonly error: undefined;
 	readonly failureCause: undefined;
 	readonly dataUpdatedAt: 0;
-	readonly valueOrUndefined: undefined;
 }
 
-export interface QuerySuccess<A, E = never> extends AsyncResult.Success<A, E> {
+export interface QuerySuccess<A> {
 	readonly status: "success";
 	readonly fetchStatus: "fetching" | "idle";
 	readonly isPending: false;
@@ -56,10 +54,9 @@ export interface QuerySuccess<A, E = never> extends AsyncResult.Success<A, E> {
 	readonly error: undefined;
 	readonly failureCause: undefined;
 	readonly dataUpdatedAt: number;
-	readonly valueOrUndefined: A;
 }
 
-export interface QueryFailure<A, E = never> extends AsyncResult.Failure<A, E> {
+export interface QueryFailure<A, E = never> {
 	readonly status: "error";
 	readonly fetchStatus: "fetching" | "idle";
 	readonly isPending: false;
@@ -71,12 +68,11 @@ export interface QueryFailure<A, E = never> extends AsyncResult.Failure<A, E> {
 	readonly error: E | undefined;
 	readonly failureCause: Cause.Cause<E>;
 	readonly dataUpdatedAt: number;
-	readonly valueOrUndefined: A | undefined;
 }
 
 export type QueryResult<A, E> =
-	| QueryPending<A, E>
-	| QuerySuccess<A, E>
+	| QueryPending
+	| QuerySuccess<A>
 	| QueryFailure<A, E>;
 export type QueryCodec<A, E> = Schema.Codec<
 	QueryResult<A | never, E | never>,
@@ -150,7 +146,60 @@ export type QueryOptions<
 	R = never,
 > = QueryAtomFactoryOptions<Arg, A, E, R>;
 
-export type MutationAtom<Arg, A, E = never> = Atom.AtomResultFn<Arg, A, E>;
+export interface MutationIdle {
+	readonly status: "idle";
+	readonly isIdle: true;
+	readonly isPending: false;
+	readonly isSuccess: false;
+	readonly isError: false;
+	readonly data: undefined;
+	readonly error: undefined;
+	readonly failureCause: undefined;
+}
+
+export interface MutationPending<A> {
+	readonly status: "pending";
+	readonly isIdle: false;
+	readonly isPending: true;
+	readonly isSuccess: false;
+	readonly isError: false;
+	readonly data: A | undefined;
+	readonly error: undefined;
+	readonly failureCause: undefined;
+}
+
+export interface MutationSuccess<A> {
+	readonly status: "success";
+	readonly isIdle: false;
+	readonly isPending: false;
+	readonly isSuccess: true;
+	readonly isError: false;
+	readonly data: A;
+	readonly error: undefined;
+	readonly failureCause: undefined;
+}
+
+export interface MutationFailure<A, E = never> {
+	readonly status: "error";
+	readonly isIdle: false;
+	readonly isPending: false;
+	readonly isSuccess: false;
+	readonly isError: true;
+	readonly data: A | undefined;
+	readonly error: E | undefined;
+	readonly failureCause: Cause.Cause<E>;
+}
+
+export type MutationResult<A, E> =
+	| MutationIdle
+	| MutationPending<A>
+	| MutationSuccess<A>
+	| MutationFailure<A, E>;
+
+export type MutationAtom<Arg, A, E = never> = Atom.Writable<
+	MutationResult<A, E>,
+	Arg | Atom.Reset | Atom.Interrupt
+>;
 
 export interface MutationAtomFactoryOptions<
 	FactoryArg,

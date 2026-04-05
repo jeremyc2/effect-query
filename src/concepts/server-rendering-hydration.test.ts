@@ -14,11 +14,7 @@ test("server rendering and hydration preserve successful query snapshots", async
 	const sourceRegistry = AtomRegistry.make();
 	const atom = userQuery("1");
 	const release = sourceRegistry.mount(atom);
-	await Effect.runPromise(
-		AtomRegistry.getResult(sourceRegistry, atom, {
-			suspendOnWaiting: true,
-		}),
-	);
+	await Effect.runPromise(userQuery.ensure("1"));
 
 	const dehydrated = dehydrate(sourceRegistry);
 	const targetRegistry = AtomRegistry.make();
@@ -26,6 +22,6 @@ test("server rendering and hydration preserve successful query snapshots", async
 
 	const hydrated = targetRegistry.get(atom);
 	assertSuccess(hydrated);
-	expect(hydrated.value).toBe("1:hydrated");
+	expect(hydrated.data).toBe("1:hydrated");
 	release();
 });

@@ -24,12 +24,12 @@ test("initial query data seeds the cache before the first fetch", async () => {
 	const release = registry.mount(atom);
 	const current = registry.get(atom);
 	assertSuccess(current);
-	expect(current.value).toBe("1:seeded");
+	expect(current.data).toBe("1:seeded");
 	expect(calls).toBe(0);
 
 	const peeked = await Effect.runPromise(userQuery.peek("1"));
 	assertSome(peeked);
 	assertSuccess(peeked.value);
-	expect(peeked.value.value).toBe("1:seeded");
+	expect(peeked.value.data).toBe("1:seeded");
 	release();
 });

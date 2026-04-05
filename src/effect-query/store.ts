@@ -9,6 +9,7 @@ import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as ServiceMap from "effect/ServiceMap";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import {
 	applyDataUpdater,
 	failureQueryResult,
@@ -304,7 +305,14 @@ export const QueryStoreLayer = Layer.effect(
 				});
 			}
 			return failureQueryResult(result.failureCause, {
-				previousSuccess: result.previousSuccess,
+				previousSuccess:
+					result.data === undefined
+						? Option.none()
+						: Option.some(
+								AsyncResult.success(result.data, {
+									timestamp: result.dataUpdatedAt,
+								}),
+							),
 			});
 		};
 

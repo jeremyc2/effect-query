@@ -1,21 +1,51 @@
 import { expect, test } from "bun:test";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createMutationAtom } from "../EffectQuery.ts";
+import {
+	assertMutationError,
+	waitForMutationError,
+	waitForMutationSuccess,
+} from "../testing-utils.ts";
 
-test("mutations run their mutation function", async () => {
+test("mutation atoms expose idle, pending, and success states", async () => {
 	const addUser = createMutationAtom({
-		mutationFn: (name: string) => Effect.succeed(`created:${name}`),
+		mutationFn: Effect.fnUntraced(function* (name: string) {
+			yield* Effect.sleep("10 millis");
+			return `created:${name}`;
+		}),
 	});
 
 	const registry = AtomRegistry.make();
 	const release = registry.mount(addUser);
-	registry.set(addUser, "ada");
 
-	expect(
-		await Effect.runPromise(
-			AtomRegistry.getResult(registry, addUser, { suspendOnWaiting: true }),
-		),
-	).toBe("created:ada");
+	expect(registry.get(addUser).status).toBe("idle");
+	registry.set(addUser, "ada");
+	expect(registry.get(addUser).status).toBe("pending");
+
+	const result = await Effect.runPromise(
+		waitForMutationSuccess(registry, addUser),
+	);
+	expect(result.data).toBe("created:ada");
+	release();
+});
+
+test("mutation atoms expose errors without leaking raw async-result fields", async () => {
+	const createUser = createMutationAtom({
+		mutationFn: () => Effect.fail("duplicate-user"),
+	});
+
+	const registry = AtomRegistry.make();
+	const release = registry.mount(createUser);
+	registry.set(createUser, undefined);
+
+	const result = await Effect.runPromise(
+		waitForMutationError(registry, createUser),
+	);
+	assertMutationError(result);
+	expect(result.status).toBe("error");
+	expect(result.error).toBe("duplicate-user");
+	expect(result.failureCause.pipe(Cause.pretty)).toContain("duplicate-user");
 	release();
 });

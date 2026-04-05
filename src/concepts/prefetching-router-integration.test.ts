@@ -24,7 +24,7 @@ test("prefetching warms the cache before the query atom mounts", async () => {
 	const release = registry.mount(atom);
 	const current = registry.get(atom);
 	assertSuccess(current);
-	expect(current.value).toBe("1:fetched");
+	expect(current.data).toBe("1:fetched");
 	expect(calls).toBe(1);
 	release();
 });

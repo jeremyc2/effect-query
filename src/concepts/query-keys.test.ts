@@ -16,6 +16,6 @@ test("query keys partition cache entries by argument", async () => {
 
 	assertSome(first);
 	assertSuccess(first.value);
-	expect(first.value.value).toBe("1:seeded");
+	expect(first.value.data).toBe("1:seeded");
 	expect(second.pipe(Option.isNone)).toBe(true);
 });

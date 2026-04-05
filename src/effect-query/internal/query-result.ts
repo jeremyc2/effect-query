@@ -17,33 +17,11 @@ class QueryResultMissingError extends Schema.TaggedErrorClass<QueryResultMissing
 	{},
 ) {}
 
-type QueryPendingState<A, E> = Omit<
-	QueryPending<A, E>,
-	keyof AsyncResult.Initial<A, E>
->;
-
-type QuerySuccessState<A, E> = Omit<
-	QuerySuccess<A, E>,
-	keyof AsyncResult.Success<A, E>
->;
-
-type QueryFailureState<A, E> = Omit<
-	QueryFailure<A, E>,
-	keyof AsyncResult.Failure<A, E>
->;
-
-function attachQueryState<A, E, R extends AsyncResult.AsyncResult<A, E>, S>(
-	result: R,
-	state: S,
-): R & S {
-	return Object.assign(result, state);
-}
-
 export function normalizeQueryResult<A, E>(
 	result: AsyncResult.AsyncResult<A, E>,
 ): QueryResult<A, E> {
 	if (AsyncResult.isInitial(result)) {
-		const state: QueryPendingState<A, E> = {
+		const pending: QueryPending = {
 			status: "pending",
 			fetchStatus: result.waiting ? "fetching" : "idle",
 			isPending: true,
@@ -55,13 +33,12 @@ export function normalizeQueryResult<A, E>(
 			error: undefined,
 			failureCause: undefined,
 			dataUpdatedAt: 0,
-			valueOrUndefined: undefined,
 		};
-		return attachQueryState(result, state);
+		return pending;
 	}
 
 	if (AsyncResult.isSuccess(result)) {
-		const state: QuerySuccessState<A, E> = {
+		const success: QuerySuccess<A> = {
 			status: "success",
 			fetchStatus: result.waiting ? "fetching" : "idle",
 			isPending: false,
@@ -73,14 +50,15 @@ export function normalizeQueryResult<A, E>(
 			error: undefined,
 			failureCause: undefined,
 			dataUpdatedAt: result.timestamp,
-			valueOrUndefined: result.value,
 		};
-		return attachQueryState(result, state);
+		return success;
 	}
 
-	const data = getCurrentSuccess(result).pipe(Option.getOrUndefined);
+	const data = getCurrentSuccessFromAsyncResult(result).pipe(
+		Option.getOrUndefined,
+	);
 	const error = Cause.findErrorOption(result.cause).pipe(Option.getOrUndefined);
-	const state: QueryFailureState<A, E> = {
+	const failure: QueryFailure<A, E> = {
 		status: "error",
 		fetchStatus: result.waiting ? "fetching" : "idle",
 		isPending: false,
@@ -94,9 +72,8 @@ export function normalizeQueryResult<A, E>(
 		dataUpdatedAt: Option.isSome(result.previousSuccess)
 			? result.previousSuccess.value.timestamp
 			: 0,
-		valueOrUndefined: data,
 	};
-	return attachQueryState(result, state);
+	return failure;
 }
 
 export function flattenObservedResult<A, E>(
@@ -108,7 +85,7 @@ export function flattenObservedResult<A, E>(
 	if (AsyncResult.isFailure(result)) {
 		return initialQueryResult();
 	}
-	return normalizeQueryResult(result.value);
+	return result.value;
 }
 
 export function initialQueryResult<A = never, E = never>(
@@ -142,17 +119,20 @@ export function failureQueryResult<A, E = never>(
 export function waitingFromPrevious<A, E>(
 	previous: Option.Option<QueryResult<A, E>>,
 ): QueryResult<A, E> {
-	const rawPrevious: Option.Option<AsyncResult.AsyncResult<A, E>> = previous;
-	return rawPrevious.pipe(AsyncResult.waitingFrom, normalizeQueryResult);
+	return normalizeQueryResult(
+		Option.map(previous, toRawQueryResult).pipe(AsyncResult.waitingFrom),
+	);
 }
 
 export function fromExitWithPrevious<A, E>(
 	exit: Exit.Exit<A, E>,
 	previous: Option.Option<QueryResult<A, E>>,
 ): QueryResult<A, E> {
-	const rawPrevious: Option.Option<AsyncResult.AsyncResult<A, E>> = previous;
 	return normalizeQueryResult(
-		AsyncResult.fromExitWithPrevious(exit, rawPrevious),
+		AsyncResult.fromExitWithPrevious(
+			exit,
+			Option.map(previous, toRawQueryResult),
+		),
 	);
 }
 
@@ -185,7 +165,16 @@ export function applyDataUpdater<A>(
 }
 
 export function getCurrentSuccess<A, E>(
-	result: QueryResult<A, E> | AsyncResult.AsyncResult<A, E>,
+	result: QueryResult<A, E>,
+): Option.Option<A> {
+	if (result.isSuccess) {
+		return Option.some(result.data);
+	}
+	return Option.none();
+}
+
+function getCurrentSuccessFromAsyncResult<A, E>(
+	result: AsyncResult.AsyncResult<A, E>,
 ): Option.Option<A> {
 	if (AsyncResult.isSuccess(result)) {
 		return Option.some(result.value);
@@ -194,4 +183,29 @@ export function getCurrentSuccess<A, E>(
 		return Option.some(result.previousSuccess.value.value);
 	}
 	return Option.none();
+}
+
+function toRawQueryResult<A, E>(
+	result: QueryResult<A, E>,
+): AsyncResult.AsyncResult<A, E> {
+	if (result.isPending) {
+		return AsyncResult.initial(result.isFetching);
+	}
+	if (result.isSuccess) {
+		return AsyncResult.success(result.data, {
+			waiting: result.isFetching,
+			timestamp: result.dataUpdatedAt,
+		});
+	}
+	return AsyncResult.failure(result.failureCause, {
+		waiting: result.isFetching,
+		previousSuccess:
+			result.data === undefined
+				? Option.none()
+				: Option.some(
+						AsyncResult.success(result.data, {
+							timestamp: result.dataUpdatedAt,
+						}),
+					),
+	});
 }

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createQueryAtomFactory, makeRuntime } from "../EffectQuery.ts";
-import { assertSuccess } from "../testing-utils.ts";
+import { assertSuccess, waitForQuerySuccess } from "../testing-utils.ts";
 
 test("polling refetches active queries on the refetch interval", async () => {
 	const runtime = makeRuntime();
@@ -22,14 +22,12 @@ test("polling refetches active queries on the refetch interval", async () => {
 	const registry = AtomRegistry.make();
 	const atom = userQuery("1");
 	const release = registry.mount(atom);
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(waitForQuerySuccess(registry, atom));
 	await Effect.runPromise(Effect.sleep("35 millis"));
 
 	const current = registry.get(atom);
 	assertSuccess(current);
-	expect(current.value).not.toBe("1:1");
+	expect(current.data).not.toBe("1:1");
 	expect(calls).toBeGreaterThanOrEqual(2);
 	release();
 });

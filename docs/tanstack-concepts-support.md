@@ -16,7 +16,7 @@ documented for TanStack Query. It is intentionally honest: a concept can be
 | Network Mode | Partial | `networkMode: "online"` pauses fetches while offline and resumes them on reconnect, and `networkMode: "always"` ignores connectivity. `offlineFirst` still behaves like `always` until retry-specific pause semantics grow. |
 | Parallel Queries | Supported | Multiple query atoms can be read in parallel. |
 | Dependent Queries | Supported | Compose atoms so one query atom depends on local atom state or another query result. |
-| Background Fetching Indicators | Partial | `AsyncResult.waiting` distinguishes background refetches, but there is no dedicated `useIsFetching`-style aggregate helper yet. |
+| Background Fetching Indicators | Partial | `isFetching` and `isRefetching` distinguish in-flight work, but there is no dedicated `useIsFetching`-style aggregate helper yet. |
 | Window Focus Refetching | Supported | `refetchOnWindowFocus` plus `onWindowFocus`. |
 | Polling | Supported | `refetchInterval` polls active query atoms while mounted. |
 | Disabling/Pausing Queries | Partial | `enabled` is supported for automatic fetch control, but there is not yet a richer pause / `skipToken` story. |

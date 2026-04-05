@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import {
 	createQueryAtomFactory,
@@ -9,6 +8,7 @@ import {
 	onReconnect,
 	provideRuntime,
 } from "../EffectQuery.ts";
+import { assertPending, waitForQuerySuccess } from "../testing-utils.ts";
 
 test("networkMode online pauses fetches while offline and resumes on reconnect", async () => {
 	const runtime = makeRuntime();
@@ -33,14 +33,12 @@ test("networkMode online pauses fetches while offline and resumes on reconnect",
 
 	expect(calls).toBe(0);
 	const paused = registry.get(atom);
-	expect(paused.pipe(AsyncResult.isInitial)).toBe(true);
-	expect(paused.waiting).toBe(true);
+	assertPending(paused);
+	expect(paused.isFetching).toBe(true);
 
 	await Effect.runPromise(provideRuntime(runtime, onReconnect));
 	expect(
-		await Effect.runPromise(
-			AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-		),
+		(await Effect.runPromise(waitForQuerySuccess(registry, atom))).data,
 	).toBe("1:1");
 	release();
 });

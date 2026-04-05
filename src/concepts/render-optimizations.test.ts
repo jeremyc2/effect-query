@@ -22,12 +22,7 @@ test("render optimizations keep unrelated query subscribers quiet", async () => 
 	const releaseUser = registry.mount(userAtom);
 	const releaseProject = registry.mount(projectAtom);
 	await Effect.runPromise(
-		Effect.all([
-			AtomRegistry.getResult(registry, userAtom, { suspendOnWaiting: true }),
-			AtomRegistry.getResult(registry, projectAtom, {
-				suspendOnWaiting: true,
-			}),
-		]),
+		Effect.all([userQuery.ensure("1"), projectQuery.ensure("1")]),
 	);
 
 	let userNotifications = 0;

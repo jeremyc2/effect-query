@@ -6,7 +6,7 @@ import {
 	createQueryAtomFactory,
 	makeRuntime,
 } from "../EffectQuery.ts";
-import { assertSuccess } from "../testing-utils.ts";
+import { assertSuccess, waitForMutationSuccess } from "../testing-utils.ts";
 
 test("invalidation from mutations only refreshes declared reactivity keys", async () => {
 	const runtime = makeRuntime();
@@ -41,30 +41,21 @@ test("invalidation from mutations only refreshes declared reactivity keys", asyn
 	const releaseMutation = registry.mount(invalidateUser);
 
 	await Effect.runPromise(
-		Effect.all([
-			AtomRegistry.getResult(registry, userAtom, { suspendOnWaiting: true }),
-			AtomRegistry.getResult(registry, projectAtom, {
-				suspendOnWaiting: true,
-			}),
-		]),
+		Effect.all([userQuery.ensure("1"), projectQuery.ensure("1")]),
 	);
 
 	userVersion = "v2";
 	projectVersion = "v2";
 	registry.set(invalidateUser, "1");
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, invalidateUser, {
-			suspendOnWaiting: true,
-		}),
-	);
+	await Effect.runPromise(waitForMutationSuccess(registry, invalidateUser));
 	await Effect.runPromise(Effect.sleep("0 millis"));
 
 	const nextUser = registry.get(userAtom);
 	const nextProject = registry.get(projectAtom);
 	assertSuccess(nextUser);
 	assertSuccess(nextProject);
-	expect(nextUser.value).toBe("1:v2");
-	expect(nextProject.value).toBe("1:v1");
+	expect(nextUser.data).toBe("1:v2");
+	expect(nextProject.data).toBe("1:v1");
 
 	releaseMutation();
 	releaseProject();

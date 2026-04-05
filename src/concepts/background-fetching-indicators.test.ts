@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createQueryAtomFactory } from "../EffectQuery.ts";
-import { assertSuccess } from "../testing-utils.ts";
+import { assertSuccess, waitForQuerySuccess } from "../testing-utils.ts";
 
-test("background fetching indicators are exposed through AsyncResult.waiting", async () => {
+test("background fetching indicators are exposed through isFetching", async () => {
 	let version = "v1";
 	const userQuery = createQueryAtomFactory({
 		queryKey: (id: string) => ["user", id],
@@ -17,9 +17,7 @@ test("background fetching indicators are exposed through AsyncResult.waiting", a
 	const registry = AtomRegistry.make();
 	const atom = userQuery("1");
 	const release = registry.mount(atom);
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(waitForQuerySuccess(registry, atom));
 
 	version = "v2";
 	registry.refresh(atom);
@@ -27,6 +25,6 @@ test("background fetching indicators are exposed through AsyncResult.waiting", a
 
 	const current = registry.get(atom);
 	assertSuccess(current);
-	expect(current.waiting).toBe(true);
+	expect(current.isFetching).toBe(true);
 	release();
 });

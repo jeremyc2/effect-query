@@ -1,10 +1,15 @@
 import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import * as Reactivity from "effect/unstable/reactivity/Reactivity";
-import { hasMutationRuntime, resolveMutationFn } from "../core.ts";
+import {
+	hasMutationRuntime,
+	normalizeMutationResult,
+	resolveMutationFn,
+} from "../core.ts";
 import { defaultRuntime } from "../runtime.ts";
 import { QueryStore } from "../store.ts";
 import type {
+	MutationAtom,
 	MutationAtomFactory,
 	MutationAtomFactoryInput,
 	MutationAtomFactoryOptions,
@@ -16,8 +21,8 @@ import type {
 function createMutationAtomWithRuntime<Arg, A, E = never, R = never>(
 	runtime: QueryRuntime<R>,
 	options: MutationOptions<Arg, A, E, R>,
-): Atom.AtomResultFn<Arg, A, E> {
-	return runtime.fn(
+): MutationAtom<Arg, A, E> {
+	const mutation = runtime.fn(
 		Effect.fn(function* (arg: Arg) {
 			const result = yield* resolveMutationFn(options)(arg);
 			if (options.onSuccess !== undefined) {
@@ -37,19 +42,23 @@ function createMutationAtomWithRuntime<Arg, A, E = never, R = never>(
 			initialValue: options.initialValue,
 		},
 	);
+
+	return Atom.transform(mutation, (get) =>
+		normalizeMutationResult(get(mutation)),
+	);
 }
 
 export function createMutationAtom<Arg, A, E = never>(
 	options: MutationOptions<Arg, A, E, never>,
-): Atom.AtomResultFn<Arg, A, E>;
+): MutationAtom<Arg, A, E>;
 export function createMutationAtom<Arg, A, E = never, R = never>(
 	options: MutationOptions<Arg, A, E, R> & {
 		readonly runtime: QueryRuntime<R>;
 	},
-): Atom.AtomResultFn<Arg, A, E>;
+): MutationAtom<Arg, A, E>;
 export function createMutationAtom<Arg, A, E = never, R = never>(
 	options: MutationInput<Arg, A, E, R>,
-): Atom.AtomResultFn<Arg, A, E> {
+): MutationAtom<Arg, A, E> {
 	if (!hasMutationRuntime(options)) {
 		return createMutationAtomWithRuntime<Arg, A, E, never>(
 			defaultRuntime,

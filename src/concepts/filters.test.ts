@@ -29,14 +29,7 @@ test("filters can invalidate a grouped set of related query atoms", async () => 
 	const releaseOne = registry.mount(taskOneAtom);
 	const releaseTwo = registry.mount(taskTwoAtom);
 	await Effect.runPromise(
-		Effect.all([
-			AtomRegistry.getResult(registry, taskOneAtom, {
-				suspendOnWaiting: true,
-			}),
-			AtomRegistry.getResult(registry, taskTwoAtom, {
-				suspendOnWaiting: true,
-			}),
-		]),
+		Effect.all([taskQuery.ensure("1"), taskQuery.ensure("2")]),
 	);
 
 	taskOneVersion = "v2";
@@ -53,8 +46,8 @@ test("filters can invalidate a grouped set of related query atoms", async () => 
 	const second = registry.get(taskTwoAtom);
 	assertSuccess(first);
 	assertSuccess(second);
-	expect(first.value).toBe("v2");
-	expect(second.value).toBe("v2");
+	expect(first.data).toBe("v2");
+	expect(second.data).toBe("v2");
 
 	releaseTwo();
 	releaseOne();

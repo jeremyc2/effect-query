@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createMutationAtomFactory, mutationOptions } from "../EffectQuery.ts";
+import { waitForMutationSuccess } from "../testing-utils.ts";
 
 test("mutation atom factories can parameterize mutation atoms by argument", async () => {
 	const options = mutationOptions({
@@ -18,12 +19,9 @@ test("mutation atom factories can parameterize mutation atoms by argument", asyn
 	const release = registry.mount(createUser);
 	registry.set(createUser, "ada");
 
-	expect(
-		await Effect.runPromise(
-			AtomRegistry.getResult(registry, createUser, {
-				suspendOnWaiting: true,
-			}),
-		),
-	).toBe("created:team-1:ada");
+	const result = await Effect.runPromise(
+		waitForMutationSuccess(registry, createUser),
+	);
+	expect(result.data).toBe("created:team-1:ada");
 	release();
 });

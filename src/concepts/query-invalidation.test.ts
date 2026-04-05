@@ -7,7 +7,7 @@ import {
 	provideRuntime,
 } from "../EffectQuery.ts";
 import { QueryStore } from "../effect-query/store.ts";
-import { assertSuccess } from "../testing-utils.ts";
+import { assertSuccess, waitForQuerySuccess } from "../testing-utils.ts";
 
 test("query invalidation refetches active matching queries", async () => {
 	const runtime = makeRuntime();
@@ -25,9 +25,7 @@ test("query invalidation refetches active matching queries", async () => {
 	const registry = AtomRegistry.make();
 	const atom = userQuery("1");
 	const release = registry.mount(atom);
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(waitForQuerySuccess(registry, atom));
 
 	version = "v2";
 	await Effect.runPromise(
@@ -40,6 +38,6 @@ test("query invalidation refetches active matching queries", async () => {
 
 	const current = registry.get(atom);
 	assertSuccess(current);
-	expect(current.value).toBe("1:v2");
+	expect(current.data).toBe("1:v2");
 	release();
 });

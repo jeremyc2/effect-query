@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createQueryAtomFactory } from "../EffectQuery.ts";
+import { waitForQuerySuccess } from "../testing-utils.ts";
 
 test("dependent queries can defer fetching with enabled", async () => {
 	let calls = 0;
@@ -25,11 +26,7 @@ test("dependent queries can defer fetching with enabled", async () => {
 
 	const releaseEnabled = registry.mount(enabledAtom);
 	expect(
-		await Effect.runPromise(
-			AtomRegistry.getResult(registry, enabledAtom, {
-				suspendOnWaiting: true,
-			}),
-		),
+		(await Effect.runPromise(waitForQuerySuccess(registry, enabledAtom))).data,
 	).toBe("results:openai");
 	expect(calls).toBe(1);
 	releaseEnabled();

@@ -18,6 +18,6 @@ test("paginated queries can keep separate cache entries per page", async () => {
 	assertSome(second);
 	assertSuccess(first.value);
 	assertSuccess(second.value);
-	expect(first.value.value).toBe("page:1");
-	expect(second.value.value).toBe("page:2");
+	expect(first.value.data).toBe("page:1");
+	expect(second.value.data).toBe("page:2");
 });

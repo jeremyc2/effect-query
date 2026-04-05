@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import { createMutationAtom, createQueryAtomFactory } from "../EffectQuery.ts";
-import { assertSuccess } from "../testing-utils.ts";
+import { assertSuccess, waitForMutationSuccess } from "../testing-utils.ts";
 
 test("updates from mutation responses can write directly into cached query data", async () => {
 	const userQuery = createQueryAtomFactory({
@@ -20,18 +20,14 @@ test("updates from mutation responses can write directly into cached query data"
 	const atom = userQuery("1");
 	const releaseQuery = registry.mount(atom);
 	const releaseMutation = registry.mount(renameUser);
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(userQuery.ensure("1"));
 
 	registry.set(renameUser, { id: "1", name: "after" });
-	await Effect.runPromise(
-		AtomRegistry.getResult(registry, renameUser, { suspendOnWaiting: true }),
-	);
+	await Effect.runPromise(waitForMutationSuccess(registry, renameUser));
 
 	const current = registry.get(atom);
 	assertSuccess(current);
-	expect(current.value).toBe("1:after");
+	expect(current.data).toBe("1:after");
 
 	releaseMutation();
 	releaseQuery();
