@@ -8,56 +8,57 @@ import {
 } from "../EffectQuery.ts";
 import { assertSuccess, waitForMutationSuccess } from "../testing-utils.ts";
 
-test("invalidation from mutations only refreshes declared reactivity keys", async () => {
-	const runtime = makeRuntime();
-	let userVersion = "v1";
-	let projectVersion = "v1";
+test("invalidation from mutations only refreshes declared reactivity keys", () =>
+	Effect.runPromise(
+		Effect.gen(function* () {
+			const runtime = makeRuntime();
+			let userVersion = "v1";
+			let projectVersion = "v1";
 
-	const userQuery = createQueryAtomFactory({
-		runtime,
-		queryKey: (id: string) => ["user", id],
-		staleTime: "1 hour",
-		reactivityKeys: (id: string) => ({ user: [id] }),
-		queryFn: (id: string) => Effect.succeed(`${id}:${userVersion}`),
-	});
-	const projectQuery = createQueryAtomFactory({
-		runtime,
-		queryKey: (id: string) => ["project", id],
-		staleTime: "1 hour",
-		reactivityKeys: (id: string) => ({ project: [id] }),
-		queryFn: (id: string) => Effect.succeed(`${id}:${projectVersion}`),
-	});
-	const invalidateUser = createMutationAtom({
-		runtime,
-		mutationFn: (id: string) => Effect.succeed(id),
-		invalidate: (id: string) => ({ user: [id] }),
-	});
+			const userQuery = createQueryAtomFactory({
+				runtime,
+				queryKey: (id: string) => ["user", id],
+				staleTime: "1 hour",
+				reactivityKeys: (id: string) => ({ user: [id] }),
+				queryFn: (id: string) => Effect.succeed(`${id}:${userVersion}`),
+			});
+			const projectQuery = createQueryAtomFactory({
+				runtime,
+				queryKey: (id: string) => ["project", id],
+				staleTime: "1 hour",
+				reactivityKeys: (id: string) => ({ project: [id] }),
+				queryFn: (id: string) => Effect.succeed(`${id}:${projectVersion}`),
+			});
+			const invalidateUser = createMutationAtom({
+				runtime,
+				mutationFn: (id: string) => Effect.succeed(id),
+				invalidate: (id: string) => ({ user: [id] }),
+			});
 
-	const registry = AtomRegistry.make();
-	const userAtom = userQuery("1");
-	const projectAtom = projectQuery("1");
-	const releaseUser = registry.mount(userAtom);
-	const releaseProject = registry.mount(projectAtom);
-	const releaseMutation = registry.mount(invalidateUser);
+			const registry = AtomRegistry.make();
+			const userAtom = userQuery("1");
+			const projectAtom = projectQuery("1");
+			const releaseUser = registry.mount(userAtom);
+			const releaseProject = registry.mount(projectAtom);
+			const releaseMutation = registry.mount(invalidateUser);
 
-	await Effect.runPromise(
-		Effect.all([userQuery.ensure("1"), projectQuery.ensure("1")]),
-	);
+			yield* Effect.all([userQuery.ensure("1"), projectQuery.ensure("1")]);
 
-	userVersion = "v2";
-	projectVersion = "v2";
-	registry.set(invalidateUser, "1");
-	await Effect.runPromise(waitForMutationSuccess(registry, invalidateUser));
-	await Effect.runPromise(Effect.sleep("0 millis"));
+			userVersion = "v2";
+			projectVersion = "v2";
+			registry.set(invalidateUser, "1");
+			yield* waitForMutationSuccess(registry, invalidateUser);
+			yield* Effect.sleep("0 millis");
 
-	const nextUser = registry.get(userAtom);
-	const nextProject = registry.get(projectAtom);
-	assertSuccess(nextUser);
-	assertSuccess(nextProject);
-	expect(nextUser.data).toBe("1:v2");
-	expect(nextProject.data).toBe("1:v1");
+			const nextUser = registry.get(userAtom);
+			const nextProject = registry.get(projectAtom);
+			assertSuccess(nextUser);
+			assertSuccess(nextProject);
+			expect(nextUser.data).toBe("1:v2");
+			expect(nextProject.data).toBe("1:v1");
 
-	releaseMutation();
-	releaseProject();
-	releaseUser();
-});
+			releaseMutation();
+			releaseProject();
+			releaseUser();
+		}),
+	));

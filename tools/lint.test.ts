@@ -48,8 +48,8 @@ describe("lint fixtures", () => {
 		expect(effectPromise.then((value) => value)).resolves.toBe("done");
 	});
 	test("Oxlint forbids the built-in Promise constructor (if we hadn't used oxlint-disable-next-line)", () => {
-		// oxlint-disable-next-line effect-query/no-promise-global
-		const promise = new Promise<string>((resolve) => resolve("ok"));
+		// @effect-diagnostics-next-line newPromise:off - fixture needs a real Promise constructor
+		const promise = new Promise<string>((resolve) => resolve("ok")); // oxlint-disable-line effect-query/no-promise-global
 		expect(typeof promise.then).toBe("function");
 	});
 	test("Oxlint forbids static Promise methods (if we hadn't used oxlint-disable-next-line)", () => {
@@ -109,12 +109,11 @@ describe("lint fixtures", () => {
 	});
 	test("Oxlint forbids arrow functions that return effect.gen (if we hadn't used oxlint-disable-next-line)", () => {
 		// oxlint-disable-next-line effect-query/prefer-effect-fn-for-effect-gen
-		const doBadGeneratorArrow = () => {
-			return Effect.gen(function* () {
+		const doBadGeneratorArrow = () =>
+			Effect.gen(function* () {
 				yield* Effect.log("test");
 				return yield* Effect.succeed("test");
 			});
-		};
 		expect(doBadGeneratorArrow).toBeInstanceOf(Function);
 	});
 });

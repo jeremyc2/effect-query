@@ -1,4 +1,5 @@
 import type * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
 import type * as Duration from "effect/Duration";
 import type * as Effect from "effect/Effect";
 import type * as Fiber from "effect/Fiber";
@@ -8,7 +9,6 @@ import type * as Schedule from "effect/Schedule";
 import type * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import type * as Semaphore from "effect/Semaphore";
-import type * as ServiceMap from "effect/ServiceMap";
 import type * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as Atom from "effect/unstable/reactivity/Atom";
 import type * as Reactivity from "effect/unstable/reactivity/Reactivity";
@@ -408,7 +408,7 @@ export type QueryRuntimeWithLayer<R = never, E = never> = QueryRuntime<R, E> & {
 	readonly [QueryRuntimeStateId]: {
 		readonly scope: Scope.Closeable;
 		readonly lock: Semaphore.Semaphore;
-		services: Option.Option<ServiceMap.ServiceMap<R | QueryStore>>;
+		services: Option.Option<Context.Context<R | QueryStore>>;
 	};
 };
 

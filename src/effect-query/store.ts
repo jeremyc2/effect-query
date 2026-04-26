@@ -1,4 +1,5 @@
 import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -7,7 +8,6 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
-import * as ServiceMap from "effect/ServiceMap";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import {
@@ -35,7 +35,7 @@ import type {
 	TouchReason,
 } from "./types.ts";
 
-export class QueryStore extends ServiceMap.Service<
+export class QueryStore extends Context.Service<
 	QueryStore,
 	{
 		readonly observe: <Arg, A, E, R>(
@@ -133,8 +133,8 @@ export const QueryStoreLayer = Layer.effect(
 				return existing;
 			}
 
-			const runQuery = yield* Effect.servicesWith(
-				(services: ServiceMap.ServiceMap<R>) =>
+			const runQuery = yield* Effect.contextWith(
+				(context: Context.Context<R>) =>
 					Effect.succeed((abortController: AbortController) => {
 						const key = definition.key(arg);
 						let fetchEffect: Effect.Effect<A, E, R> = definition.query(arg, {
@@ -146,7 +146,7 @@ export const QueryStoreLayer = Layer.effect(
 								Effect.retry(definition.policy.retry),
 							);
 						}
-						return Effect.provideServices(fetchEffect, services).pipe(
+						return Effect.provideContext(fetchEffect, context).pipe(
 							Effect.onInterrupt(() =>
 								Effect.sync(() => abortController.abort()),
 							),

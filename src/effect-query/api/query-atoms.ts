@@ -59,7 +59,7 @@ function createQueryAtomFactoryWithRuntime<Arg, A, E = never, R = never>(
 		const refreshToken: Atom.Atom<number> = Atom.readable(() => refreshEpoch);
 
 		const observed = runtime.subscriptionRef(
-			Effect.fn(function* (get: Atom.Context) {
+			Effect.fn(function* (get: Atom.AtomContext) {
 				const refreshCount = get(refreshToken);
 				const store = yield* QueryStore;
 				const ref = yield* store.observe(definition, arg);

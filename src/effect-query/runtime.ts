@@ -76,6 +76,6 @@ export const provideRuntime = <A, E, R = never>(
 						);
 			}),
 		);
-		return yield* Effect.provideServices(effect, services);
+		return yield* Effect.provideContext(effect, services);
 	});
 };

@@ -71,6 +71,28 @@ export const waitForQuerySuccess = Effect.fnUntraced(function* <A, E>(
 	});
 });
 
+export const waitForQueryFetching = Effect.fnUntraced(function* <A, E>(
+	registry: AtomRegistry.AtomRegistry,
+	atom: Atom.Atom<QueryResult<A, E>>,
+) {
+	const current = registry.get(atom);
+	if (current.isSuccess && current.isFetching) {
+		return current;
+	}
+
+	return yield* Effect.callback<QuerySuccess<A>, never>((resume) => {
+		const unsubscribe = registry.subscribe(atom, (next) => {
+			if (!next.isSuccess || !next.isFetching) {
+				return;
+			}
+			unsubscribe();
+			resume(Effect.succeed(next));
+		});
+
+		return Effect.sync(unsubscribe);
+	});
+});
+
 export const waitForMutationSuccess = Effect.fnUntraced(function* <A, E>(
 	registry: AtomRegistry.AtomRegistry,
 	atom: Atom.Atom<MutationResult<A, E>>,

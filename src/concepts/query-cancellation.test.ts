@@ -8,77 +8,84 @@ import {
 	waitForQuerySuccess,
 } from "../testing-utils.ts";
 
-test("query cancellation aborts in-flight work and restores the previous value", async () => {
-	const runtime = makeRuntime();
-	let calls = 0;
-	let aborted = false;
-	const userQuery = createQueryAtomFactory({
-		runtime,
-		queryKey: (id: string) => ["user", id],
-		queryFn: (id, { signal }) => {
-			calls += 1;
-			if (calls === 1) {
-				return Effect.succeed(`${id}:v1`);
-			}
-			return Effect.never.pipe(
-				Effect.onInterrupt(() =>
-					Effect.sync(() => {
-						aborted = signal.aborted;
-					}),
-				),
+test("query cancellation aborts in-flight work and restores the previous value", () =>
+	Effect.runPromise(
+		Effect.gen(function* () {
+			const runtime = makeRuntime();
+			let calls = 0;
+			let aborted = false;
+			const userQuery = createQueryAtomFactory({
+				runtime,
+				queryKey: (id: string) => ["user", id],
+				queryFn: (id, { signal }) => {
+					calls += 1;
+					if (calls === 1) {
+						return Effect.succeed(`${id}:v1`);
+					}
+					return Effect.never.pipe(
+						Effect.onInterrupt(() =>
+							Effect.sync(() => {
+								aborted = signal.aborted;
+							}),
+						),
+					);
+				},
+			});
+
+			const registry = AtomRegistry.make();
+			const atom = userQuery("1");
+			const release = registry.mount(atom);
+			yield* waitForQuerySuccess(registry, atom);
+
+			yield* userQuery.refresh("1").pipe(
+				Effect.catchCause(() => Effect.void),
+				Effect.forkDetach,
 			);
-		},
-	});
+			yield* Effect.sleep("0 millis");
+			const waiting = registry.get(atom);
+			assertSuccess(waiting);
+			expect(waiting.isFetching).toBe(true);
 
-	const registry = AtomRegistry.make();
-	const atom = userQuery("1");
-	const release = registry.mount(atom);
-	await Effect.runPromise(waitForQuerySuccess(registry, atom));
+			yield* userQuery.cancel("1");
+			yield* Effect.sleep("0 millis");
 
-	Effect.runFork(
-		userQuery.refresh("1").pipe(Effect.catchCause(() => Effect.void)),
-	);
-	await Effect.runPromise(Effect.sleep("0 millis"));
-	const waiting = registry.get(atom);
-	assertSuccess(waiting);
-	expect(waiting.isFetching).toBe(true);
+			expect(aborted).toBe(true);
+			const current = registry.get(atom);
+			assertSuccess(current);
+			expect(current.isFetching).toBe(false);
+			expect(current.data).toBe("1:v1");
+			release();
+		}),
+	));
 
-	await Effect.runPromise(userQuery.cancel("1"));
-	await Effect.runPromise(Effect.sleep("0 millis"));
+test("query cancellation resets an initial fetch back to the initial state", () =>
+	Effect.runPromise(
+		Effect.gen(function* () {
+			const runtime = makeRuntime();
+			const userQuery = createQueryAtomFactory({
+				runtime,
+				queryKey: (id: string) => ["user", id],
+				queryFn: (_id, { signal }) =>
+					Effect.never.pipe(
+						Effect.onInterrupt(() =>
+							Effect.sync(() => {
+								expect(signal.aborted).toBe(true);
+							}),
+						),
+					),
+			});
 
-	expect(aborted).toBe(true);
-	const current = registry.get(atom);
-	assertSuccess(current);
-	expect(current.isFetching).toBe(false);
-	expect(current.data).toBe("1:v1");
-	release();
-});
+			const registry = AtomRegistry.make();
+			const atom = userQuery("1");
+			const release = registry.mount(atom);
+			yield* Effect.sleep("0 millis");
 
-test("query cancellation resets an initial fetch back to the initial state", async () => {
-	const runtime = makeRuntime();
-	const userQuery = createQueryAtomFactory({
-		runtime,
-		queryKey: (id: string) => ["user", id],
-		queryFn: (_id, { signal }) =>
-			Effect.never.pipe(
-				Effect.onInterrupt(() =>
-					Effect.sync(() => {
-						expect(signal.aborted).toBe(true);
-					}),
-				),
-			),
-	});
+			yield* userQuery.cancel("1");
+			yield* Effect.sleep("0 millis");
 
-	const registry = AtomRegistry.make();
-	const atom = userQuery("1");
-	const release = registry.mount(atom);
-	await Effect.runPromise(Effect.sleep("0 millis"));
-
-	await Effect.runPromise(userQuery.cancel("1"));
-	await Effect.runPromise(Effect.sleep("0 millis"));
-
-	const current = registry.get(atom);
-	assertPending(current);
-	expect(current.isFetching).toBe(false);
-	release();
-});
+			const current = registry.get(atom);
+			assertPending(current);
+			expect(current.isFetching).toBe(false);
+			release();
+		}),
+	));
